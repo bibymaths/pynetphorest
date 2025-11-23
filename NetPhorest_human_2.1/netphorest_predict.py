@@ -3,8 +3,6 @@ import json
 import math
 import sys
 from pathlib import Path
-
-# Import core logic
 import netphorest_core as core
 
 
@@ -14,7 +12,7 @@ def load_atlas(path):
         print("Please run builder.py first to generate the JSON atlas.")
         sys.exit(1)
     with open(path, "r") as f:
-        return json.load(f)
+        return json.load(f)['models']
 
 
 def parse_fasta(path):

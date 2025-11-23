@@ -2,18 +2,89 @@ import argparse
 import json
 import math
 import sys
+import sqlite3
 from pathlib import Path
 import netphorest_core as core
 
 
 def load_atlas(path):
-    if not Path(path).exists():
+    p = Path(path)
+    if not p.exists():
         print(f"Error: Atlas file '{path}' not found.")
-        print("Please run builder.py first to generate the JSON atlas.")
         sys.exit(1)
-    with open(path, "r") as f:
-        return json.load(f)['models']
 
+    # Case 1: Load from SQLite Database
+    if p.suffix == '.db':
+        conn = sqlite3.connect(p)
+        conn.row_factory = sqlite3.Row  # Allows accessing columns by name
+        cursor = conn.cursor()
+
+        models = []
+
+        # Fetch all models
+        cursor.execute("SELECT * FROM models")
+        rows = cursor.fetchall()
+
+        for row in rows:
+            # Reconstruct the exact dictionary structure the script expects
+            model = {
+                'id': row['id'],
+                'type': row['type'],
+                'residues': row['residues'].split(',') if row['residues'] else [],
+                'divisor': row['divisor'],
+                'sigmoid': {
+                    'slope': row['sig_slope'],
+                    'inflection': row['sig_inflection'],
+                    'min': row['sig_min'],
+                    'max': row['sig_max']
+                },
+                'meta': {
+                    'method': row['method'],
+                    'tree': row['organism'],
+                    'classifier': row['classifier'],
+                    'kinase': row['kinase'],
+                    'prior': row['prior']
+                }
+            }
+
+            # Fetch the weights (components) for this model
+            cursor.execute("""
+                           SELECT window_size, hidden_units, weights
+                           FROM model_components
+                           WHERE model_id = ?
+                           ORDER BY component_index
+                           """, (row['id'],))
+
+            components = cursor.fetchall()
+
+            # Handle Neural Network Structure
+            if model['type'] == 'NN':
+                model['networks'] = []
+                for comp in components:
+                    model['networks'].append({
+                        'window': comp['window_size'],
+                        'hidden': comp['hidden_units'],
+                        'weights': json.loads(comp['weights'])
+                    })
+
+            # Handle PSSM Structure
+            elif model['type'] == 'PSSM':
+                if components:
+                    comp = components[0]
+                    model['window'] = comp['window_size']
+                    model['weights'] = json.loads(comp['weights'])
+
+            models.append(model)
+
+        conn.close()
+        return models
+
+    # Case 2: Load from JSON (Legacy support)
+    else:
+        with open(p, "r") as f:
+            data = json.load(f)
+            # Handle both raw list and dictionary wrapper format
+            return data['models'] if isinstance(data, dict) and 'models' in data else data
 
 def parse_fasta(path):
     seqs = {}
@@ -37,7 +108,7 @@ def main():
     parser = argparse.ArgumentParser(description="NetPhorest Python Predictor")
     parser.add_argument("fasta", help="Input FASTA file")
     parser.add_argument("--out", help="Output file (tsv)", default=None)
-    parser.add_argument("--atlas", help="Path to JSON atlas", default="netphorest_atlas.json")
+    parser.add_argument("--atlas", help="Path to JSON atlas", default="netphorest.db")
     args = parser.parse_args()
 
     # Load Models

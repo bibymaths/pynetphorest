@@ -5,6 +5,7 @@ description = "A Python port of the NetPhorest tool for phosphorylation network 
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "joblib>=1.5.2",
     "numpy>=1.26.0",
     "pandas>=2.2.0",
     "typer>=0.12,<1.0",

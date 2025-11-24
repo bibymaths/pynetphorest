@@ -55,6 +55,7 @@ License
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
+from joblib import Parallel, delayed
 import argparse, math, sys, pathlib
 from . import core
 
@@ -142,31 +143,25 @@ def main():
     header = "# Name\tPosition\tResidue\tPeptide\tMethod\tTree\tClassifier\tPosterior\tPrior"
     out_handle.write(header + "\n")
 
-    # Prediction Loop
-    for name, seq in sequences.items():
+    def process_one_protein(name, seq, models):
+        out_lines = []
         seq_upper = seq.upper()
 
         for i, res in enumerate(seq_upper):
-            # NetPhorest only targets S, T, Y
             if res not in ['S', 'T', 'Y']:
                 continue
 
             for model in models:
-                # 1. Residue Filter (Context Awareness)
                 if res not in model['residues']:
                     continue
 
                 raw_score = 0.0
 
-                # 2. Calculate Raw Score
                 if model['type'] == 'PSSM':
                     peptide = core.get_window(seq_upper, i, model['window'])
                     indices = core.encode_peptide(peptide)
-
-                    # Reject unsupported chars
                     if any(idx > 20 for idx in indices):
                         continue
-
                     raw_score = core.score_pssm(indices, model['weights'], model['divisor'])
 
                 elif model['type'] == 'NN':
@@ -176,13 +171,9 @@ def main():
                     for net in model['networks']:
                         peptide = core.get_window(seq_upper, i, net['window'])
                         indices = core.encode_peptide(peptide)
-
-                        # Reject unsupported chars
                         if any(idx > 20 for idx in indices):
                             valid_ensemble = False
                             break
-
-                        # Feed-forward through the network
                         total_nn_score += core.score_feed_forward(
                             indices, net['weights'], net['window'], net['hidden']
                         )
@@ -190,41 +181,44 @@ def main():
                     if not valid_ensemble:
                         continue
 
-                    # Average the ensemble score
                     raw_score = total_nn_score / model['divisor']
 
-                # 3. Post-Processing
                 if raw_score <= 0:
                     continue
 
-                # Log Transformation for PSSM models only
                 if model['type'] == 'PSSM':
                     log_score = math.log(raw_score)
                 else:
                     log_score = raw_score
 
-                # Sigmoid Scaling
                 sig = model['sigmoid']
                 term = sig['slope'] * (sig['inflection'] - log_score)
-
                 if term > 50: term = 50.0
                 if term < -50: term = -50.0
 
-                # Calculate Posterior Probability
                 posterior = sig['min'] + (sig['max'] - sig['min']) / (1.0 + math.exp(term))
 
-                # 4. Output
                 if posterior > 0.0:
                     visual = core.get_display_window(seq_upper, i)
                     meta = model['meta']
-
                     line = (f"{name}\t{i + 1}\t{res}\t{visual}\t"
                             f"{meta['method']}\t{meta['tree']}\t{meta['classifier']}\t"
                             f"{meta['kinase']}\t{posterior:.6f}\t{meta['prior']:.6f}")
-                    out_handle.write(line + "\n")
+                    out_lines.append(line)
 
-    if args.out:
-        out_handle.close()
+        return out_lines
+
+
+    # run per-protein in parallel, max cores
+    results = Parallel(n_jobs=-1, prefer="processes")(
+        delayed(process_one_protein)(name, seq, models)
+        for name, seq in sequences.items()
+    )
+
+    # write results (flatten list of lists)
+    for lines in results:
+        for line in lines:
+            out_handle.write(line + "\n")
 
 
 if __name__ == "__main__":

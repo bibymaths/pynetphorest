@@ -5,7 +5,6 @@ from pathlib import Path
 
 
 def create_schema(cursor):
-    """Creates the proper relational schema."""
 
     # 1. Main Models Table
     cursor.execute("""

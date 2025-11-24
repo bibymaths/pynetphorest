@@ -1,9 +1,10 @@
-import re
-import json
-import os
+import re, json, os
 
 
 def parse_float_arrays(filenames):
+    """
+
+    """
     arrays = {}
     pattern = re.compile(r'float const (\w+)\[\] = \{(.*?)\};', re.DOTALL)
 

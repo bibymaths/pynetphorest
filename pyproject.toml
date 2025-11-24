@@ -1,5 +1,5 @@
 [project]
-name = "pyNetworKIN"
+name = "pynetworkin"
 version = "0.1.0"
 description = "A Python port of the NetPhorest tool for phosphorylation network analysis."
 readme = "README.md"
@@ -7,14 +7,24 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.26.0",
     "pandas>=2.2.0",
+    "typer>=0.12,<1.0",
+]
+authors = [
+    { name = "Abhinav Mishra", email = "mishraabhinav36@gmail.com" }
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[project.scripts]
+app = "pynetphorest.cli:app"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/pynetphorest"]
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.uv]
 dev-dependencies = [

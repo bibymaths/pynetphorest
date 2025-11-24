@@ -56,8 +56,7 @@ License
 """
 
 import argparse, math, sys, pathlib
-import core as core
-
+from . import core
 
 def main():
     # Argument Parsing
@@ -91,7 +90,7 @@ def main():
     parser.add_argument(
         "--out",
         type=pathlib.Path,
-        metavar="TSV",
+        metavar="TXT",
         default=None,
         help=(
             "Output TSV file path.\n"

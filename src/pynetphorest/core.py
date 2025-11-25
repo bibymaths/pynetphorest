@@ -55,7 +55,7 @@ License
 """
 
 from typing import List, Iterable, Tuple, Iterator, Optional
-import json, sys, sqlite3
+import json, sys, sqlite3, math
 from pathlib import Path
 
 # Constants
@@ -70,7 +70,11 @@ MAXHIDDEN = 20
 ALPHABET = "FIVWMLCHYAGNRTPDEQSK"
 # Mapping from Amino Acid to Index
 CHAR_TO_IDX = {c: i for i, c in enumerate(ALPHABET)}
-
+# Common phosphorylation-dependent binding domains (Readers)
+READER_DOMAINS = {
+    'SH2', 'PTB', 'C2', 'WW', '14-3-3', 'FHA', 'BRCT',
+    'Polo-box', 'WD40', 'Broman', 'Chromodomain'
+}
 # Precomputed Sigmoid Lookup Table for fast approximation
 SIGMOID_DATA: List[float] = [
     0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
@@ -546,3 +550,70 @@ def parse_fasta(path):
                 parts.append(line)
         if name: seqs[name] = "".join(parts)
     return seqs
+
+
+def classify_model_role(model):
+    """
+    Determines if a model is a 'Writer' (Kinase) or a 'Reader' (Binding Domain).
+    Returns 'WRITER' or 'READER'.
+    """
+    # Check the classifier string from the atlas metadata
+    classifier = model['meta'].get('classifier', '').upper()
+    group = model['meta'].get('kinase', '').upper()
+
+    # Check against known reader domains
+    if any(domain in classifier for domain in READER_DOMAINS):
+        return 'READER'
+    if any(domain in group for domain in READER_DOMAINS):
+        return 'READER'
+
+    # Default to WRITER (Kinase)
+    return 'WRITER'
+
+
+def get_model_posterior(seq_upper, i, model):
+    """
+    Calculates the posterior probability for a specific site and model.
+    Encapsulates PSSM/NN selection and Sigmoid transformation.
+    Returns: float (0.0 to 1.0)
+    """
+    if model["type"] == "PSSM":
+        peptide = get_window(seq_upper, i, model["window"])
+        indices = encode_peptide(peptide)
+        if any(idx > 20 for idx in indices): return 0.0
+
+        raw_score = score_pssm(indices, model["weights"], model["divisor"])
+
+    elif model["type"] == "NN":
+        total_nn_score = 0.0
+        valid_ensemble = True
+        for net in model["networks"]:
+            peptide = get_window(seq_upper, i, net["window"])
+            indices = encode_peptide(peptide)
+            if any(idx > 20 for idx in indices):
+                valid_ensemble = False
+                break
+            total_nn_score += score_feed_forward(indices, net["weights"], net["window"], net["hidden"])
+
+        if not valid_ensemble: return 0.0
+        raw_score = total_nn_score / model["divisor"]
+    else:
+        return 0.0
+
+    if raw_score <= 0.0: return 0.0
+
+    # Log transformation for PSSM
+    log_score = math.log(raw_score) if model["type"] == "PSSM" else raw_score
+
+    # Sigmoid Transformation
+    sig = model["sigmoid"]
+    term = sig["slope"] * (sig["inflection"] - log_score)
+
+    # Clamp for numerical stability
+    if term > 50.0:
+        term = 50.0
+    elif term < -50.0:
+        term = -50.0
+
+    posterior = sig["min"] + (sig["max"] - sig["min"]) / (1.0 + math.exp(term))
+    return posterior

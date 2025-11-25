@@ -9,10 +9,14 @@ app.add_typer(netphorest_app, name="netphorest")
 
 @netphorest_app.command("fasta")
 def netphorest(
-    fasta: str = typer.Argument(..., help="Input FASTA file (or '-' for stdin)."),
-    out: str = typer.Option(None, "--out", help="Output TSV path. Default: stdout."),
-    atlas: str = typer.Option("netphorest.db", "--atlas", help="Atlas .db/.sqlite or .json.")
-):
+    fasta: str = typer.Argument(
+        ..., help="Input FASTA file (or '-' for stdin)."),
+    out: str = typer.Option(None,
+                            "--out", help="Output TSV path. Default: stdout."),
+    atlas: str = typer.Option("netphorest.db",
+                              "--atlas", help="Atlas .db/.sqlite or .json."),
+    causal: bool = typer.Option(False, "--causal",
+                                    help="Enable Writer->Reader causal linking (Kinase recruits Binder).")):
     """
     Run NetPhorest prediction on FASTA sequences.
     """
@@ -23,6 +27,8 @@ def netphorest(
         sys.argv += ["--out", out]
     if atlas is not None:
         sys.argv += ["--atlas", atlas]
+    if causal:
+        sys.argv.append("--causal")
 
     main()
 

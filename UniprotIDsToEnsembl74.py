@@ -10,7 +10,6 @@ usage Human python UniprotIDsToEnsembl74.py -o 9606 ResultsFile.txt
 """
 
 import argparse
-import fileinput
 import os
 import csv
 import sys
@@ -24,7 +23,6 @@ parser.add_argument('-f', "--fasta", type=str, required=True, help="Provide rela
 args = parser.parse_args()
 
 sys.stderr.write("Path: %s\n"%os.path.dirname(os.path.abspath(__file__)))
-#sys.stderr.write("Organism: %s\n"%args.organism)
 sys.stderr.write("results: %s\n"%args.results)
 
 if args.organism == "10090" or args.organism == "9606":
@@ -32,8 +30,8 @@ if args.organism == "10090" or args.organism == "9606":
 else:
     raise Exception("Organism not recognized.\nMust be 9606 for human data or 10090 for mouse data.")
 
-#uniprotDict = {}
-#geneNameDict = {}
+uniprotDict = {}
+geneNameDict = {}
 
 with open(os.path.dirname(os.path.abspath(__file__)) +"/Data/20181002_Biomart_IdentifierConversion_Human_Mouse.csv") as infile:
     reader = csv.DictReader(infile)

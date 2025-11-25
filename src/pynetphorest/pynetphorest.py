@@ -116,6 +116,12 @@ def main():
         )
     )
 
+    parser.add_argument(
+        "--causal",
+        action="store_true",
+        help="Enable Writer->Reader causal linking (Kinase recruits Binder)."
+    )
+
     args = parser.parse_args()
 
     # FASTA input: allow stdin via "-"
@@ -134,96 +140,164 @@ def main():
     models = core.load_atlas(args.atlas)
     sequences = core.parse_fasta(args.fasta)
 
+    writers, readers = [], []
+    if args.causal:
+        for m in models:
+            if core.classify_model_role(m) == 'READER':
+                readers.append(m)
+            else:
+                writers.append(m)
+    else:
+        # In standard mode, we treat everything as a flat list of models
+        writers = models
+        readers = []
+
     # Setup Output
     if args.out:
         out_handle = open(args.out, 'w')
     else:
         out_handle = sys.stdout
 
-    # ------------------------------------------------------------
-    # Nested parallelism:
-    #   - outer level: per protein (process-based)
-    #   - inner level: per S/T/Y site (thread-based)
-    # ------------------------------------------------------------
-    def score_position(name, seq_upper, i, res, models):
+    # Decide which models to use based on mode
+    models_to_pass = writers if args.causal else models
+
+    def score_position(name, seq_upper, i, res, models, readers=None, causal_mode=False):
         """
         Score a single S/T/Y position of a protein against all models.
         Returns list of output lines (can be empty).
         """
         out_lines = []
 
-        for model in models:
-            if res not in model["residues"]:
-                continue
-
-            raw_score = 0.0
-
-            if model["type"] == "PSSM":
-                peptide = core.get_window(seq_upper, i, model["window"])
-                indices = core.encode_peptide(peptide)
-                # skip if any index is out of amino-acid range
-                if any(idx > 20 for idx in indices):
+        # ------------------------------------------------------------
+        # BRANCH 1: STANDARD PREDICTION (Your Exact Original Code)
+        # ------------------------------------------------------------
+        if not causal_mode:
+            for model in models:
+                if res not in model["residues"]:
                     continue
-                raw_score = core.score_pssm(
-                    indices,
-                    model["weights"],
-                    model["divisor"],
-                )
 
-            elif model["type"] == "NN":
-                total_nn_score = 0.0
-                valid_ensemble = True
+                raw_score = 0.0
 
-                for net in model["networks"]:
-                    peptide = core.get_window(seq_upper, i, net["window"])
+                # --- Explicit Inline Logic (Preserved) ---
+                if model["type"] == "PSSM":
+                    peptide = core.get_window(seq_upper, i, model["window"])
                     indices = core.encode_peptide(peptide)
+                    # skip if any index is out of amino-acid range
                     if any(idx > 20 for idx in indices):
-                        valid_ensemble = False
-                        break
-                    total_nn_score += core.score_feed_forward(
+                        continue
+                    raw_score = core.score_pssm(
                         indices,
-                        net["weights"],
-                        net["window"],
-                        net["hidden"],
+                        model["weights"],
+                        model["divisor"],
                     )
 
-                if not valid_ensemble:
+                elif model["type"] == "NN":
+                    total_nn_score = 0.0
+                    valid_ensemble = True
+
+                    for net in model["networks"]:
+                        peptide = core.get_window(seq_upper, i, net["window"])
+                        indices = core.encode_peptide(peptide)
+                        if any(idx > 20 for idx in indices):
+                            valid_ensemble = False
+                            break
+                        total_nn_score += core.score_feed_forward(
+                            indices,
+                            net["weights"],
+                            net["window"],
+                            net["hidden"],
+                        )
+
+                    if not valid_ensemble:
+                        continue
+
+                    raw_score = total_nn_score / model["divisor"]
+                # -----------------------------------------
+
+                if raw_score <= 0.0:
                     continue
 
-                raw_score = total_nn_score / model["divisor"]
+                # transform score
+                if model["type"] == "PSSM":
+                    log_score = math.log(raw_score)
+                else:
+                    log_score = raw_score
 
-            if raw_score <= 0.0:
-                continue
+                sig = model["sigmoid"]
+                term = sig["slope"] * (sig["inflection"] - log_score)
+                if term > 50.0:
+                    term = 50.0
+                elif term < -50.0:
+                    term = -50.0
 
-            # transform score
-            if model["type"] == "PSSM":
-                log_score = math.log(raw_score)
-            else:
-                log_score = raw_score
+                posterior = sig["min"] + (sig["max"] - sig["min"]) / (1.0 + math.exp(term))
 
-            sig = model["sigmoid"]
-            term = sig["slope"] * (sig["inflection"] - log_score)
-            # clamp for numerical stability
-            if term > 50.0:
-                term = 50.0
-            elif term < -50.0:
-                term = -50.0
+                if posterior > 0.0:
+                    visual = core.get_display_window(seq_upper, i)
+                    meta = model["meta"]
+                    line = (
+                        f"{name}\t{i + 1}\t{res}\t{visual}\t"
+                        f"{meta['method']}\t{meta['tree']}\t{meta['classifier']}\t"
+                        f"{meta['kinase']}\t{posterior:.6f}\t{meta['prior']:.6f}"
+                    )
+                    out_lines.append(line)
 
-            posterior = sig["min"] + (sig["max"] - sig["min"]) / (1.0 + math.exp(term))
+            return out_lines
 
-            if posterior > 0.0:
-                visual = core.get_display_window(seq_upper, i)
-                meta = model["meta"]
+        # ------------------------------------------------------------
+        # BRANCH 2: CAUSAL PREDICTION (New Extension)
+        # ------------------------------------------------------------
+        else:
+            # Note: We use core.get_model_posterior here to keep the new logic clean
+            # and avoid copying the massive block above a second time.
+
+            # A. Find the best Writer (Kinase)
+            best_kinase_name = "-"
+            best_kinase_prob = 0.0
+
+            for model in models:
+                if res not in model["residues"]: continue
+
+                # Using the helper for the new branch only
+                prob = core.get_model_posterior(seq_upper, i, model)
+
+                if prob > best_kinase_prob:
+                    best_kinase_prob = prob
+                    best_kinase_name = model['meta']['kinase']
+
+            if best_kinase_prob < 0.1:
+                return []
+
+            # B. Check Readers (Binders)
+            has_binder = False
+            visual = core.get_display_window(seq_upper, i)
+
+            if readers:
+                for reader in readers:
+                    if res not in reader["residues"]: continue
+
+                    bind_prob = core.get_model_posterior(seq_upper, i, reader)
+
+                    if bind_prob > 0.5:
+                        has_binder = True
+                        line = (
+                            f"{name}\t{i + 1}\t{res}\t{visual}\t"
+                            f"{best_kinase_name}\t{best_kinase_prob:.4f}\t"
+                            f"{reader['meta']['kinase']}\t{bind_prob:.4f}\t{reader['meta']['classifier']}"
+                        )
+                        out_lines.append(line)
+
+            if not has_binder and best_kinase_prob > 0.5:
                 line = (
                     f"{name}\t{i + 1}\t{res}\t{visual}\t"
-                    f"{meta['method']}\t{meta['tree']}\t{meta['classifier']}\t"
-                    f"{meta['kinase']}\t{posterior:.6f}\t{meta['prior']:.6f}"
+                    f"{best_kinase_name}\t{best_kinase_prob:.4f}\t"
+                    f"-\t-\t-"
                 )
                 out_lines.append(line)
 
-        return out_lines
+            return out_lines
 
-    def process_one_protein(name, seq, models, n_inner=None):
+    def process_one_protein(name, seq, models, readers=None, causal_mode=False, n_inner=None):
         """
         Process one protein:
           - collect all S/T/Y sites
@@ -241,11 +315,12 @@ def main():
             n_inner = max(1, min(4, os.cpu_count() or 1))
 
         # inner parallel: per-site, thread-based
+        # We now pass 'readers' and 'causal_mode' into the worker function
         site_results = Parallel(
             n_jobs=n_inner,
             backend="threading",
         )(
-            delayed(score_position)(name, seq_upper, i, res, models)
+            delayed(score_position)(name, seq_upper, i, res, models, readers, causal_mode)
             for (i, res) in tqdm(positions, desc=f"{name} sites", leave=False)
         )
 
@@ -264,19 +339,34 @@ def main():
     if len(seq_items) < 2:
         # small input: no outer processes, but keep inner threading
         results = [
-            process_one_protein(name, seq, models, n_inner=max(1, (os.cpu_count() or 1) // 2))
+            process_one_protein(
+                name, seq,
+                models=models_to_pass,
+                readers=readers,
+                causal_mode=args.causal,
+                n_inner=max(1, (os.cpu_count() or 1) // 2)
+            )
             for name, seq in seq_items
         ]
     else:
         # outer processes, inner threads
         results = Parallel(n_jobs=-1, prefer="processes")(
-            delayed(process_one_protein)(name, seq, models)
+            delayed(process_one_protein)(
+                name, seq,
+                models=models_to_pass,
+                readers=readers,
+                causal_mode=args.causal
+            )
             for name, seq in tqdm(seq_items, desc="Proteins")
         )
 
     # write results
     # Write Header
-    header = "# Name\tPosition\tResidue\tPeptide\tMethod\tTree\tClassifier\tPosterior\tPrior"
+    if args.causal:
+        header = "# Substrate\tPos\tRes\tPeptide\tTop_Kinase\tKin_Prob\tRecruited_Binder\tBind_Prob\tBinder_Type"
+    else:
+        header = "# Name\tPosition\tResidue\tPeptide\tMethod\tTree\tClassifier\tPosterior\tPrior"
+
     out_handle.write(header + "\n")
 
     for lines in results:

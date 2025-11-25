@@ -1,18 +1,48 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Threshold sweep evaluation with global and per-residue metrics.
 
-Assumes the following files exist in the working directory:
-- crosstalk_model.pkl       (trained HistGradientBoostingClassifier)
-- eval_data.npz             (X_test, y_test from training)
-- full_dataset.npz          (X, y for the full dataset, in original order)
-- edge_metadata.json         (one JSON dict per line, aligned with dataset rows)
+NetPhorest Python Implementation
+================================
 
-Residue groups:
-- "S"      : aa1 == "S" and aa2 == "S"
-- "T"      : aa1 == "T" and aa2 == "T"
-- "Y"      : aa1 == "Y" and aa2 == "Y"
-- "mixed"  : everything else (including S/T, S/Y, T/Y, etc.)
+Author : Abhinav Mishra <mishraabhinav36@gmail.com>
+Date   : 2025-06-15
+
+Description
+-----------
+This module provides functions to evaluate a trained crosstalk prediction model. It includes loading evaluation data,
+computing metrics (AP, ROC AUC, Brier score), generating plots (PR curve, ROC curve, confusion matrix), summarizing feature importances,
+analyzing prediction TSV files, and computing subgroup metrics based on edge metadata.
+
+License
+-------
+# Copyright (c) 2025, Abhinav Mishra
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# Redistributions of source code must retain the above copyright notice, this
+# list of conditions and the following disclaimer.
+#
+# Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# Neither the name of the copyright holder nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 import argparse
@@ -123,10 +153,10 @@ def safe_mcc(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def eval_thresholds(
-    probs: np.ndarray,
-    y_true: np.ndarray,
-    residue_groups: List[str],
-    thresholds: np.ndarray,
+        probs: np.ndarray,
+        y_true: np.ndarray,
+        residue_groups: List[str],
+        thresholds: np.ndarray,
 ) -> Tuple[List[Dict], List[Dict]]:
     """
     Compute global and per-residue metrics for a set of thresholds.
@@ -278,15 +308,15 @@ def write_tsv(path: str, header: List[str], rows: List[Dict]) -> None:
 
 
 def run_sweep_thresh(
-    model: str = "crosstalk_model.pkl",
-    eval_npz: str = "eval_data.npz",
-    full_npz: str = "full_dataset.npz",
-    meta_json: str = "edge_metadata.json",
-    min_th: float = 0.10,
-    max_th: float = 0.90,
-    step: float = 0.05,
-    out_global: str | None = None,
-    out_residues: str | None = None,
+        model: str = "crosstalk_model.pkl",
+        eval_npz: str = "eval_data.npz",
+        full_npz: str = "full_dataset.npz",
+        meta_json: str = "edge_metadata.json",
+        min_th: float = 0.10,
+        max_th: float = 0.90,
+        step: float = 0.05,
+        out_global: str | None = None,
+        out_residues: str | None = None,
 ):
     """
     Programmatic entry point for threshold sweep.
@@ -364,6 +394,7 @@ def run_sweep_thresh(
 
     return global_rows, residue_rows
 
+
 def main():
     parser = argparse.ArgumentParser(
         description=(
@@ -371,15 +402,45 @@ def main():
             "including MCC."
         )
     )
-    parser.add_argument("--model", default="crosstalk_model.pkl")
-    parser.add_argument("--eval",  default="eval_data.npz")
-    parser.add_argument("--full",  default="full_dataset.npz")
-    parser.add_argument("--meta",  default="edge_metadata.json")
-    parser.add_argument("--min-th", type=float, default=0.10)
-    parser.add_argument("--max-th", type=float, default=0.90)
-    parser.add_argument("--step",   type=float, default=0.05)
-    parser.add_argument("--out-global",   default=None)
-    parser.add_argument("--out-residues", default=None)
+    parser.add_argument(
+        "--model",
+        default="crosstalk_model.pkl"
+    )
+    parser.add_argument(
+        "--eval",
+        default="eval_data.npz"
+    )
+    parser.add_argument(
+        "--full",
+        default="full_dataset.npz"
+    )
+    parser.add_argument(
+        "--meta",
+        default="edge_metadata.json"
+    )
+    parser.add_argument(
+        "--min-th",
+        type=float,
+        default=0.10
+    )
+    parser.add_argument(
+        "--max-th",
+        type=float,
+        default=0.90
+    )
+    parser.add_argument(
+        "--step",
+        type=float,
+        default=0.05
+    )
+    parser.add_argument(
+        "--out-global",
+        default=None
+    )
+    parser.add_argument(
+        "--out-residues",
+        default=None
+    )
     args = parser.parse_args()
 
     global_rows, residue_rows = run_sweep_thresh(
@@ -394,9 +455,10 @@ def main():
         out_residues=args.out_residues,
     )
 
-    # Print to stdout like before
-    print_global_table(global_rows)
-    print_residue_table(residue_rows)
+    if not args.out_global:
+        print_global_table(global_rows)
+    if not args.out_residues:
+        print_residue_table(residue_rows)
 
 
 if __name__ == "__main__":

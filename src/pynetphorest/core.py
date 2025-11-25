@@ -434,7 +434,6 @@ def fasta_iter(lines: Iterable[str]) -> Iterator[Tuple[str, str]]:
         yield name, "".join(seq_chunks)
 
 
-
 def load_atlas(path):
     """
     Load kinase models from a JSON or SQLite atlas file.
@@ -525,6 +524,7 @@ def load_atlas(path):
             data = json.load(f)
             # Handle both raw list and dictionary wrapper format
             return data['models'] if isinstance(data, dict) and 'models' in data else data
+
 
 def parse_fasta(path):
     """

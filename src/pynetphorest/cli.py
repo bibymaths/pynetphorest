@@ -1,3 +1,49 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+
+NetPhorest Python Implementation
+================================
+
+Author : Abhinav Mishra <mishraabhinav36@gmail.com>
+Date   : 2025-06-15
+
+Description
+-----------
+Command-line interface (CLI) for the pyNetPhorest package,
+including NetPhorest kinase–substrate prediction and PTM crosstalk analysis.
+
+License
+-------
+# Copyright (c) 2025, Abhinav Mishra
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# Redistributions of source code must retain the above copyright notice, this
+# list of conditions and the following disclaimer.
+#
+# Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# Neither the name of the copyright holder nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 import typer
 import sys
 
@@ -7,15 +53,16 @@ app = typer.Typer(
 netphorest_app = typer.Typer(help="NetPhorest Prediction.")
 app.add_typer(netphorest_app, name="netphorest")
 
+
 @netphorest_app.command("fasta")
 def netphorest(
-    fasta: str = typer.Argument(
-        ..., help="Input FASTA file (or '-' for stdin)."),
-    out: str = typer.Option(None,
-                            "--out", help="Output TSV path. Default: stdout."),
-    atlas: str = typer.Option("netphorest.db",
-                              "--atlas", help="Atlas .db/.sqlite or .json."),
-    causal: bool = typer.Option(False, "--causal",
+        fasta: str = typer.Argument(
+            ..., help="Input FASTA file (or '-' for stdin)."),
+        out: str = typer.Option(None,
+                                "--out", help="Output TSV path. Default: stdout."),
+        atlas: str = typer.Option("netphorest.db",
+                                  "--atlas", help="Atlas .db/.sqlite or .json."),
+        causal: bool = typer.Option(False, "--causal",
                                     help="Enable Writer->Reader causal linking (Kinase recruits Binder).")):
     """
     Run NetPhorest prediction on FASTA sequences.
@@ -49,20 +96,22 @@ def netphorest(
 
     main()
 
+
 crosstalk_app = typer.Typer(help="PTM Crosstalk (Functional Link) Analysis.")
 app.add_typer(crosstalk_app, name="crosstalk")
 
+
 @crosstalk_app.command("train")
 def crosstalk_train(
-    fasta: str = typer.Argument(..., help="FASTA file for sequence context."),
-    within: str = typer.Argument(..., help="PTMcode2 'within.gz' file."),
-    between: str = typer.Argument(..., help="PTMcode2 'between.gz' file."),
-    atlas: str | None = typer.Option(
-        None,
-        "--atlas",
-        help="Path to netphorest.db (defaults to package-local file)"
-    ),
-    model_out: str = typer.Option("crosstalk_model.pkl", "--out", help="Output model filename.")
+        fasta: str = typer.Argument(..., help="FASTA file for sequence context."),
+        within: str = typer.Argument(..., help="PTMcode2 'within.gz' file."),
+        between: str = typer.Argument(..., help="PTMcode2 'between.gz' file."),
+        atlas: str | None = typer.Option(
+            None,
+            "--atlas",
+            help="Path to netphorest.db (defaults to package-local file)"
+        ),
+        model_out: str = typer.Option("crosstalk_model.pkl", "--out", help="Output model filename.")
 ):
     """
     Train a new pairwise crosstalk model using NetPhorest features + PTMcode2 labels.
@@ -105,15 +154,15 @@ def crosstalk_train(
 
 @crosstalk_app.command("predict")
 def crosstalk_predict(
-    fasta: str = typer.Argument(..., help="Input FASTA file."),
-    model: str = typer.Option("crosstalk_model.pkl", "--model", help="Trained crosstalk model."),
-    atlas: str | None = typer.Option(
-        None,
-        "--atlas",
-        help="Path to netphorest.db (defaults to package-local file)"
-    ),
-    out: str = typer.Option("crosstalk_predictions.tsv", "--out", help="Output prediction file."),
-    threshold: float = typer.Option(0.8, "--thresh", help="Probability threshold.")
+        fasta: str = typer.Argument(..., help="Input FASTA file."),
+        model: str = typer.Option("crosstalk_model.pkl", "--model", help="Trained crosstalk model."),
+        atlas: str | None = typer.Option(
+            None,
+            "--atlas",
+            help="Path to netphorest.db (defaults to package-local file)"
+        ),
+        out: str = typer.Option("crosstalk_predictions.tsv", "--out", help="Output prediction file."),
+        threshold: float = typer.Option(0.8, "--thresh", help="Probability threshold.")
 ):
     """
     Predict functional links between phosphorylation sites in the input sequences.
@@ -153,14 +202,15 @@ def crosstalk_predict(
 
     crosstalk.predict(fasta, atlas, model, out, threshold)
 
+
 @crosstalk_app.command("eval")
 def crosstalk_eval(
-    model: str = typer.Option(..., "--model", help="Path to trained .pkl model."),
-    eval_npz: str = typer.Option(..., "--eval-npz", help="eval_data.npz containing X_test/y_test/w_test."),
-    dataset_npz: str = typer.Option(..., "--dataset-npz", help="full_dataset.npz containing full X/y."),
-    predictions_tsv: str = typer.Option(None, "--predictions-tsv", help="Optional predictions TSV file."),
-    metadata: str = typer.Option(None, "--metadata", help="edge_metadata.json or .jsonl"),
-    outdir: str = typer.Option("eval_output", "--outdir", help="Directory to write evaluation figures/tables.")
+        model: str = typer.Option(..., "--model", help="Path to trained .pkl model."),
+        eval_npz: str = typer.Option(..., "--eval-npz", help="eval_data.npz containing X_test/y_test/w_test."),
+        dataset_npz: str = typer.Option(..., "--dataset-npz", help="full_dataset.npz containing full X/y."),
+        predictions_tsv: str = typer.Option(None, "--predictions-tsv", help="Optional predictions TSV file."),
+        metadata: str = typer.Option(None, "--metadata", help="edge_metadata.json or .jsonl"),
+        outdir: str = typer.Option("eval_output", "--outdir", help="Directory to write evaluation figures/tables.")
 ):
     """
     Evaluate a trained crosstalk model using saved test set + full dataset.
@@ -201,53 +251,54 @@ def crosstalk_eval(
         out_prefix=out_prefix,
     )
 
+
 @crosstalk_app.command("model-thresh")
 def crosstalk_sweep_thresh(
-    model: str = typer.Option(
-        "crosstalk_model.pkl",
-        "--model",
-        help="Path to trained crosstalk model .pkl (default: crosstalk_model.pkl)",
-    ),
-    eval_npz: str = typer.Option(
-        "eval_data.npz",
-        "--eval-npz",
-        help="Path to eval_data.npz with X_test/y_test (default: eval_data.npz)",
-    ),
-    dataset_npz: str = typer.Option(
-        "full_dataset.npz",
-        "--dataset-npz",
-        help="Path to full_dataset.npz with full y (default: full_dataset.npz)",
-    ),
-    metadata: str = typer.Option(
-        "edge_metadata.json",
-        "--metadata",
-        help="edge_metadata.json (JSON-lines, one dict per row).",
-    ),
-    min_th: float = typer.Option(
-        0.10,
-        "--min-th",
-        help="Minimum decision threshold (default: 0.10)",
-    ),
-    max_th: float = typer.Option(
-        0.90,
-        "--max-th",
-        help="Maximum decision threshold (default: 0.90)",
-    ),
-    step: float = typer.Option(
-        0.05,
-        "--step",
-        help="Threshold step (default: 0.05)",
-    ),
-    out_global: str | None = typer.Option(
-        None,
-        "--out-global",
-        help="Optional TSV path for global metrics.",
-    ),
-    out_residues: str | None = typer.Option(
-        None,
-        "--out-residues",
-        help="Optional TSV path for per-residue metrics.",
-    ),
+        model: str = typer.Option(
+            "crosstalk_model.pkl",
+            "--model",
+            help="Path to trained crosstalk model .pkl (default: crosstalk_model.pkl)",
+        ),
+        eval_npz: str = typer.Option(
+            "eval_data.npz",
+            "--eval-npz",
+            help="Path to eval_data.npz with X_test/y_test (default: eval_data.npz)",
+        ),
+        dataset_npz: str = typer.Option(
+            "full_dataset.npz",
+            "--dataset-npz",
+            help="Path to full_dataset.npz with full y (default: full_dataset.npz)",
+        ),
+        metadata: str = typer.Option(
+            "edge_metadata.json",
+            "--metadata",
+            help="edge_metadata.json (JSON-lines, one dict per row).",
+        ),
+        min_th: float = typer.Option(
+            0.10,
+            "--min-th",
+            help="Minimum decision threshold (default: 0.10)",
+        ),
+        max_th: float = typer.Option(
+            0.90,
+            "--max-th",
+            help="Maximum decision threshold (default: 0.90)",
+        ),
+        step: float = typer.Option(
+            0.05,
+            "--step",
+            help="Threshold step (default: 0.05)",
+        ),
+        out_global: str | None = typer.Option(
+            None,
+            "--out-global",
+            help="Optional TSV path for global metrics.",
+        ),
+        out_residues: str | None = typer.Option(
+            None,
+            "--out-residues",
+            help="Optional TSV path for per-residue metrics.",
+        ),
 ):
     """
     Sweep probability thresholds and compute global + per-residue metrics
@@ -298,6 +349,7 @@ def crosstalk_sweep_thresh(
 
     print_global_table(global_rows)
     print_residue_table(residue_rows)
+
 
 if __name__ == "__main__":
     app()

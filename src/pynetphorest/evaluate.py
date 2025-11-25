@@ -1,10 +1,54 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+
+NetPhorest Python Implementation
+================================
+
+Author : Abhinav Mishra <mishraabhinav36@gmail.com>
+Date   : 2025-06-15
+
+Description
+-----------
+This module provides functions to evaluate a trained crosstalk prediction model. It includes loading evaluation data,
+computing metrics (AP, ROC AUC, Brier score), generating plots (PR curve, ROC curve, confusion matrix), summarizing feature importances,
+analyzing prediction TSV files, and computing subgroup metrics based on edge metadata.
+
+License
+-------
+# Copyright (c) 2025, Abhinav Mishra
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# Redistributions of source code must retain the above copyright notice, this
+# list of conditions and the following disclaimer.
+#
+# Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# Neither the name of the copyright holder nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 import argparse
 import json
-import os
 import pickle
 from pathlib import Path
-
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
@@ -19,11 +63,15 @@ from sklearn.metrics import (
 
 def load_eval_data(npz_path: Path):
     """
-    Expect an .npz file with at least:
-      - X_test
-      - y_test
-    Optional:
-      - w_test  (sample weights)
+    Load evaluation data from npz file with X_test, y_test, optional w_test.
+    Returns X_test, y_test, w_test (or None if not present).
+
+    Args
+        npz_path (Path): Path to the .npz file containing evaluation data.
+    Returns:
+        X_test (np.ndarray): Feature matrix for the test set.
+        y_test (np.ndarray): Labels for the test set.
+        w_test (np.ndarray or None): Sample weights for the test set, or None if not present.
     """
 
     data = np.load(npz_path, allow_pickle=True)
@@ -45,8 +93,13 @@ def load_eval_data(npz_path: Path):
 
 def load_edge_metadata(meta_path: Path):
     """
-    Expect a JSON-lines file (one dict per line) with keys like:
-      type, rrcs1, rrcs2, ...
+    Load edge metadata from a JSON-lines file.
+    Each line is a JSON dict corresponding to one edge/sample.
+
+    Args:
+        meta_path (Path): Path to the JSON-lines file.
+    Returns:
+        List[dict]: List of metadata dictionaries.
     """
     meta = []
     with open(meta_path, "r") as f:
@@ -60,7 +113,16 @@ def load_edge_metadata(meta_path: Path):
 
 def metrics_and_curves(clf, X_test, y_test, w_test, out_prefix: Path):
     """
-    Compute metrics and generate PR/ROC/confusion plots.
+    Compute evaluation metrics and generate plots for the test set.
+
+    Args:
+        clf: Trained classifier with predict_proba method.
+        X_test (np.ndarray): Feature matrix for the test set.
+        y_test (np.ndarray): Labels for the test set.
+        w_test (np.ndarray or None): Sample weights for the test set, or None.
+        out_prefix (Path): Prefix for output plot files.
+    Returns:
+        np.ndarray: Predicted probabilities for the positive class.
     """
 
     print("\n=== EVALUATION METRICS ===")
@@ -168,10 +230,18 @@ def metrics_and_curves(clf, X_test, y_test, w_test, out_prefix: Path):
 
 def feature_group_importance(clf, out_prefix: Path):
     """
-    Summarize and plot feature-group importance assuming:
-      - index 0: avg posterior
-      - index 1–5: top5 posteriors
-      - index 6+: peptide encoding
+    Summarize and plot feature-group importances from the trained model.
+    Indexing assumes:
+        - feature 0: avg posterior
+        - features 1-5: top5 posteriors
+        - features 6+: peptide encoding features
+
+    Args:
+        clf: Trained classifier with feature_importances_ attribute.
+        out_prefix (Path): Prefix for output plot file.
+
+    Returns:
+        None
     """
     if not hasattr(clf, "feature_importances_"):
         print("\nNo feature_importances_ on model; skipping importance plot.")
@@ -206,8 +276,12 @@ def feature_group_importance(clf, out_prefix: Path):
 
 def summarize_posteriors_from_dataset(npz_path: Path):
     """
-    If you saved the full dataset as npz with X and y, you can
-    inspect distribution of the first feature (avg posterior).
+    Summarize average posterior distributions from full dataset npz.
+
+    Args:
+        npz_path (Path): Path to the .npz file containing dataset X, y.
+    Returns:
+        None
     """
     print("\n=== DATASET FEATURE SUMMARY (avg posterior) ===")
     data = np.load(npz_path, allow_pickle=True)
@@ -224,7 +298,12 @@ def summarize_posteriors_from_dataset(npz_path: Path):
 
 def summarize_rrcs_from_edge_meta(edge_meta_path: Path):
     """
-    Use edge_metadata to inspect true rRCS distribution.
+    Summarize true rRCS values from edge metadata JSON-lines file.
+
+    Args:
+        edge_meta_path (Path): Path to the JSON-lines file with edge metadata.
+    Returns:
+        None
     """
     print("\n=== TRUE rRCS SUMMARY (from edge metadata) ===")
     meta = load_edge_metadata(edge_meta_path)
@@ -250,8 +329,12 @@ def summarize_rrcs_from_edge_meta(edge_meta_path: Path):
 
 def analyze_predictions_tsv(pred_path: Path):
     """
-    Analyze a crosstalk_predictions.tsv-style file:
-      Protein  Site1  Site2  Prob
+    Analyze a crosstalk_predictions.tsv file and summarize prediction probabilities.
+
+    Args:
+        pred_path (Path): Path to the predictions TSV file.
+    Returns:
+        None
     """
     print("\n=== PREDICTION TSV SUMMARY ===")
     edge_counts = {}
@@ -279,7 +362,7 @@ def analyze_predictions_tsv(pred_path: Path):
     all_probs = np.array(all_probs)
     print("Total edges:", all_probs.size)
     for q in [0.8, 0.9, 0.95, 0.99]:
-        print(f"prob p{int(q*100)}: {np.quantile(all_probs, q):.3f}")
+        print(f"prob p{int(q * 100)}: {np.quantile(all_probs, q):.3f}")
     print("mean prob:", float(all_probs.mean()), "std:", float(all_probs.std()))
 
     print("\nTop 10 proteins by number of edges:")
@@ -300,9 +383,19 @@ def analyze_predictions_tsv(pred_path: Path):
     plt.close()
     print(f"Saved prediction probability histogram to {hist_path}")
 
+
 def _compute_group_metrics(label, idxs, y, probs, out_rows):
     """
-    Compute AP / ROC / Brier for a masked subset and append to out_rows.
+    Compute and print metrics for a specific subgroup.
+
+    Args:
+        label (str): Label for the subgroup.
+        idxs (List[int]): Indices of samples in the subgroup.
+        y (np.ndarray): True labels for all samples.
+        probs (np.ndarray): Predicted probabilities for all samples.
+        out_rows (List[dict]): List to append the results dictionary for this subgroup.
+    Returns:
+        None
     """
     if not idxs:
         print(f"{label}: 0 samples, skipping.")
@@ -333,22 +426,24 @@ def _compute_group_metrics(label, idxs, y, probs, out_rows):
         "brier": float(brier),
     })
 
+
 def subgroup_metrics_full_dataset(
-    clf,
-    dataset_npz_path: Path,
-    edge_metadata_path: Path,
-    out_prefix: Path,
+        clf,
+        dataset_npz_path: Path,
+        edge_metadata_path: Path,
+        out_prefix: Path,
 ):
     """
-    Per-subgroup metrics using the FULL dataset (X, y) + edge_metadata.
+    Summarize subgroup metrics from full dataset and edge metadata.
 
-    Assumes:
-      - dataset_npz contains X, y
-      - edge_metadata.jsonl has one JSON dict per sample, aligned with X/y
-      - each metadata dict has:
-          type: "pos"/"neg"
-          structure: "within"/"between"
-          aa1, aa2: residue letters ("S","T","Y",...)
+    Args:
+        clf: Trained classifier with predict_proba method.
+        dataset_npz_path (Path): Path to the .npz file containing full dataset X, y.
+        edge_metadata_path (Path): Path to the JSON-lines file with edge metadata.
+        out_prefix (Path): Prefix for output files.
+
+    Returns:
+        None
     """
     print("\n=== PER-SUBGROUP METRICS (FULL DATASET) ===")
 
@@ -449,18 +544,27 @@ def subgroup_metrics_full_dataset(
         plt.close()
         print(f"Saved edge-type subgroup AP plot to {struct_plot}")
 
+
 def run_evaluation(
-    model_path: str,
-    eval_npz_path: str | None = None,
-    dataset_npz_path: str | None = None,
-    edge_metadata_path: str | None = None,
-    predictions_tsv_path: str | None = None,
-    out_prefix: str | None = None,
+        model_path: str,
+        eval_npz_path: str | None = None,
+        dataset_npz_path: str | None = None,
+        edge_metadata_path: str | None = None,
+        predictions_tsv_path: str | None = None,
+        out_prefix: str | None = None,
 ):
     """
-    Programmatic entry point used by the Typer CLI.
+    CLI function to run evaluation of a trained crosstalk model.
 
-    Parameters mirror the CLI flags, but are plain strings.
+    Args:
+        model_path (str): Path to the trained model .pkl file.
+        eval_npz_path (str | None): Path to the evaluation .npz file with X_test, y_test, optional w_test.
+        dataset_npz_path (str | None): Path to the full dataset .npz file with X, y for avg posterior summary.
+        edge_metadata_path (str | None): Path to the JSON-lines file with edge metadata for rRCS summary.
+        predictions_tsv_path (str | None): Path to the crosstalk_predictions.tsv file to summarize predictions.
+        out_prefix (str | None): Prefix for output files (default: model path without extension).
+    Returns:
+        None
     """
     model_path = Path(model_path)
 
@@ -507,12 +611,23 @@ def run_evaluation(
             out_prefix_path,
         )
 
+
 def main():
+    """
+    Command-line interface for evaluating a trained crosstalk model.
+    """
     parser = argparse.ArgumentParser(
         description="Offline analysis of crosstalk model (.pkl) and outputs."
     )
-    parser.add_argument("--model", required=True, help="Path to trained model .pkl")
-    parser.add_argument("--eval-npz", help="Path to npz with X_test, y_test, optional w_test")
+    parser.add_argument(
+        "--model",
+        required=True,
+        help="Path to trained model .pkl"
+    )
+    parser.add_argument(
+        "--eval-npz",
+        help="Path to npz with X_test, y_test, optional w_test"
+    )
     parser.add_argument(
         "--dataset-npz",
         help="Optional: npz with full dataset X, y for avg posterior summary",

@@ -1,3 +1,51 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+
+NetPhorest Python Implementation
+================================
+
+Author : Abhinav Mishra <mishraabhinav36@gmail.com>
+Date   : 2025-06-15
+
+Description
+-----------
+This script converts a JSON database of neural network and PSSM models
+into a SQLite database format. It reads the JSON file, extracts model
+metadata and weights, and populates a SQLite database with appropriate
+tables and indices for efficient querying.
+
+License
+-------
+# Copyright (c) 2025, Abhinav Mishra
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# Redistributions of source code must retain the above copyright notice, this
+# list of conditions and the following disclaimer.
+#
+# Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# Neither the name of the copyright holder nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 import sqlite3
 import json
 import sys
@@ -5,7 +53,17 @@ from pathlib import Path
 
 
 def create_schema(cursor):
+    """
+    Create the database schema for storing models and their components.
 
+    Parameters
+    ----------
+    cursor : sqlite3.Cursor
+        SQLite cursor to execute SQL commands.
+    Returns
+    -------
+    None
+    """
     # 1. Main Models Table
     cursor.execute("""
                    CREATE TABLE IF NOT EXISTS models
@@ -21,13 +79,13 @@ def create_schema(cursor):
                        residues
                        TEXT, -- Comma separated, e.g., "S,T"
                        organism
-                       TEXT, -- Mapped from meta['tree']
+                       TEXT, 
                        kinase
-                       TEXT, -- Mapped from meta['kinase']
+                       TEXT, 
                        method
-                       TEXT, -- Mapped from meta['method']
+                       TEXT, 
                        classifier
-                       TEXT, -- Mapped from meta['classifier']
+                       TEXT, 
                        prior
                        REAL,
                        divisor
@@ -86,6 +144,20 @@ def create_schema(cursor):
 
 
 def convert_json_to_db(json_path, db_path):
+    """
+    Convert a JSON database of models into a SQLite database.
+
+    Parameters
+    ----------
+    json_path : str
+        Path to the input JSON file containing model definitions.
+    db_path : str
+        Path to the output SQLite database file.
+
+    Returns
+    -------
+    None
+    """
     json_path = Path(json_path)
     if not json_path.exists():
         print(f"Error: {json_path} not found.")

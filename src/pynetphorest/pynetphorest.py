@@ -60,6 +60,7 @@ import argparse, math, sys, pathlib, os
 from tqdm import tqdm
 from . import core
 
+
 def main():
     # Argument Parsing
     parser = argparse.ArgumentParser(
@@ -375,6 +376,7 @@ def main():
 
     if out_handle is not sys.stdout:
         out_handle.close()
+
 
 if __name__ == "__main__":
     main()

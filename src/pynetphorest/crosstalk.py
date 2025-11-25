@@ -1,3 +1,61 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+
+NetPhorest Python Implementation
+================================
+
+Author : Abhinav Mishra <mishraabhinav36@gmail.com>
+Date   : 2025-06-15
+
+Description
+-----------
+This module provides functionality to train a machine learning model to predict
+post-translational modification (PTM) crosstalk between phosphorylation sites
+based on features derived from the NetPhorest kinase prediction platform.
+
+It includes functions to load protein sequences, extract features for phosphorylation sites,
+parse PTMcode data, train a classifier, and predict crosstalk on new protein sequences. The
+model uses a Gradient Boosting Classifier and incorporates rRCS-based weighting for positive
+samples during training.
+
+Reference
+---------
+Horn, H. et al. (2014). KinomeXplorer: an integrated platform for
+kinome biology studies. Nature Methods, 11(6), 603–604.
+https://doi.org/10.1038/nmeth.2968
+
+License
+-------
+# Copyright (c) 2025, Abhinav Mishra
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# Redistributions of source code must retain the above copyright notice, this
+# list of conditions and the following disclaimer.
+#
+# Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# Neither the name of the copyright holder nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 import gzip
 import json
 import pathlib
@@ -18,8 +76,17 @@ NEGATIVE_RATIO = 3
 BASE_DIR = pathlib.Path(__file__).resolve().parent
 DEFAULT_ATLAS_PATH = BASE_DIR / "netphorest.db"
 
+
 def load_sequences(fasta_path):
-    """Simple FASTA parser returning dict {header: sequence}."""
+    """
+    Simple FASTA parser returning dict {header: sequence}.
+    Handles multi-line sequences.
+
+    Args:
+        fasta_path (str): Path to the FASTA file.
+    Returns:
+        dict: Mapping of sequence names to sequences.
+    """
     seqs = {}
     name = None
     with open(fasta_path, 'r') as f:
@@ -36,6 +103,15 @@ def extract_site_features(seq, pos, aa, models, rrcs=0.0):
     """
     Features: [Avg_Post, Top5_Post..., Peptide_Encoding...]
     NetPhorest-only; rRCS is NOT used as an input feature.
+
+    Args:
+        seq (str): Protein sequence.
+        pos (int): Position of the residue in the sequence (0-based).
+        aa (str): Amino acid at the position (should be 'S', 'T', or 'Y').
+        models (list): List of NetPhorest models to use for scoring.
+        rrcs (float): Relative Residue Conservation Score (not used here).
+    Returns:
+        list or None: Feature vector or None if invalid position/AA.
     """
     if pos < 0 or pos >= len(seq) or seq[pos] != aa:
         return None
@@ -64,9 +140,27 @@ def extract_site_features(seq, pos, aa, models, rrcs=0.0):
 
 
 def parse_ptmcode_line(line, structure="within"):
+    """
+    Parse a line from PTMcode data.
+
+    Args:
+        line (str): A line from the PTMcode file.
+        structure (str): "within" or "between" indicating the type of edge.
+    Returns:
+        dict or None: Parsed data or None if invalid.
+    """
     parts = line.strip().split('\t')
 
     def parse_res(res_str):
+        """
+        Parse residue string like 'S588' into (aa, position).
+        Position is converted to 0-based index.
+
+        Args:
+            res_str (str): Residue string (e.g., 'S588').
+        Returns:
+            tuple: (amino_acid (str), position (int))
+        """
         # 'S588' -> ('S', 587)
         return res_str[0], int(res_str[1:]) - 1
 
@@ -99,6 +193,18 @@ def parse_ptmcode_line(line, structure="within"):
 
 
 def train_model(fasta, within_file, between_file, atlas_path=pathlib.Path | None, output_model="crosstalk_model.pkl"):
+    """
+    Train a crosstalk prediction model using PTMcode data.
+
+    Args
+        fasta (str): Path to the FASTA file with protein sequences.
+        within_file (str): Path to the PTMcode within-protein edges file.
+        between_file (str): Path to the PTMcode between-protein edges file.
+        atlas_path (str or None): Path to the NetPhorest atlas file.
+        output_model (str): Path to save the trained model.
+    Returns:
+        None
+    """
     if atlas_path is None:
         atlas_path = DEFAULT_ATLAS_PATH
     print(f"Loading Atlas from {atlas_path}...")
@@ -121,11 +227,18 @@ def train_model(fasta, within_file, between_file, atlas_path=pathlib.Path | None
 
     site_cache = {}
 
-
     def get_site_features(prot, pos, aa, rrcs):
         """
         Cached site features.
         Compute heavy part once per (protein, pos), then just inject rRCS.
+
+        Args:
+            prot (str): Protein ID.
+            pos (int): Position in the protein (0-based).
+            aa (str): Amino acid at the position.
+            rrcs (float): rRCS value for this site.
+        Returns:
+            list or None: Feature vector or None if invalid.
         """
         key = (prot, pos)
         base = site_cache.get(key)
@@ -186,8 +299,8 @@ def train_model(fasta, within_file, between_file, atlas_path=pathlib.Path | None
                     valid_edges += 1
 
     print(f"Generated {valid_edges} positive samples. Generating negatives...")
-    neg_count   = 0
-    target_neg  = valid_edges * NEGATIVE_RATIO
+    neg_count = 0
+    target_neg = valid_edges * NEGATIVE_RATIO
 
     # Precompute STY positions for each protein ONCE
     sty_sites = {}
@@ -202,7 +315,7 @@ def train_model(fasta, within_file, between_file, atlas_path=pathlib.Path | None
 
     with tqdm(total=target_neg, desc="Negatives") as pbar:
         for prot in prot_list:
-            seq   = sequences[prot]
+            seq = sequences[prot]
             sites = sty_sites[prot]
 
             # generate all unordered pairs of STY sites in this protein
@@ -238,37 +351,40 @@ def train_model(fasta, within_file, between_file, atlas_path=pathlib.Path | None
 
             if neg_count >= target_neg:
                 break
-    print("\n=== DATASET SUMMARY ===")
 
-    # Total rows
-    print("Total samples:", len(dataset))
+    #### Debugging / dataset summary (optional)
 
-    # Count positives & negatives
-    pos = sum(1 for row in dataset if row[-1] == 1)
-    neg = len(dataset) - pos
-    print("Positives:", pos)
-    print("Negatives:", neg)
-
-    # Dedup check
-    df_temp = pd.DataFrame(dataset)
-    unique_rows = len(df_temp.drop_duplicates())
-    print("Unique samples:", unique_rows)
-
-    # Duplication ratio
-    dup_ratio = 1 - (unique_rows / len(df_temp))
-    print(f"Duplicate ratio: {dup_ratio:.3f}")
-
-    # Feature dimensionality
-    if len(dataset) > 0:
-        print("Feature vector length:", len(dataset[0]) - 1)
-
-    rrcs_pos = [row[0] for row in dataset if row[-1] == 1]
-    rrcs_neg = [row[0] for row in dataset if row[-1] == 0]
-
-    print("RRCS positive mean:", np.mean(rrcs_pos))
-    print("RRCS negative mean:", np.mean(rrcs_neg))
-    print("RRCS positive unique values:", sorted(set(rrcs_pos))[:10])
-    print("RRCS negative unique values:", sorted(set(rrcs_neg))[:10])
+    # print("\n=== DATASET SUMMARY ===")
+    #
+    # # Total rows
+    # print("Total samples:", len(dataset))
+    #
+    # # Count positives & negatives
+    # pos = sum(1 for row in dataset if row[-1] == 1)
+    # neg = len(dataset) - pos
+    # print("Positives:", pos)
+    # print("Negatives:", neg)
+    #
+    # # Dedup check
+    # df_temp = pd.DataFrame(dataset)
+    # unique_rows = len(df_temp.drop_duplicates())
+    # print("Unique samples:", unique_rows)
+    #
+    # # Duplication ratio
+    # dup_ratio = 1 - (unique_rows / len(df_temp))
+    # print(f"Duplicate ratio: {dup_ratio:.3f}")
+    #
+    # # Feature dimensionality
+    # if len(dataset) > 0:
+    #     print("Feature vector length:", len(dataset[0]) - 1)
+    #
+    # rrcs_pos = [row[0] for row in dataset if row[-1] == 1]
+    # rrcs_neg = [row[0] for row in dataset if row[-1] == 0]
+    #
+    # print("RRCS positive mean:", np.mean(rrcs_pos))
+    # print("RRCS negative mean:", np.mean(rrcs_neg))
+    # print("RRCS positive unique values:", sorted(set(rrcs_pos))[:10])
+    # print("RRCS negative unique values:", sorted(set(rrcs_neg))[:10])
 
     df = pd.DataFrame(dataset)
     df.to_csv("full_dataset.csv", index=False)
@@ -343,11 +459,20 @@ def train_model(fasta, within_file, between_file, atlas_path=pathlib.Path | None
         pickle.dump(clf, f)
     print(f"Model saved to {output_model}")
 
+
 def _predict_for_protein(name, seq, models_by_res, models, clf, threshold):
     """
-    Vectorized crosstalk prediction for one protein.
-    Much faster: builds all pair feature vectors first,
-    then calls predict_proba once (or in chunks).
+    Predict crosstalk for all STY site pairs in a single protein.
+
+    Args:
+        name (str): Protein name/ID.
+        seq (str): Protein sequence.
+        models_by_res (dict): Residue-specific NetPhorest models.
+        models (list): All NetPhorest models.
+        clf: Trained classifier.
+        threshold (float): Probability threshold for reporting crosstalk.
+    Returns:
+        list: List of TSV lines with predictions.
     """
     sites = [i for i, c in enumerate(seq) if c in "STY"]
     if len(sites) < 2:
@@ -368,7 +493,7 @@ def _predict_for_protein(name, seq, models_by_res, models, clf, threshold):
 
     # ----- 2) Build all pair feature vectors at once -----
     pair_features = []
-    pair_meta = []   # (s1, s2)
+    pair_meta = []  # (s1, s2)
 
     for i in range(len(valid_sites)):
         for j in range(i + 1, len(valid_sites)):
@@ -394,7 +519,7 @@ def _predict_for_protein(name, seq, models_by_res, models, clf, threshold):
     probs = []
 
     for k in range(0, len(X_pairs), CHUNK):
-        p = clf.predict_proba(X_pairs[k:k+CHUNK])[:, 1]
+        p = clf.predict_proba(X_pairs[k:k + CHUNK])[:, 1]
         probs.append(p)
 
     probs = np.concatenate(probs)
@@ -419,14 +544,28 @@ def _predict_for_protein(name, seq, models_by_res, models, clf, threshold):
 
     return lines
 
+
 def predict(
-    fasta,
-    atlas_path=pathlib.Path | None,
-    model_path=pathlib.Path | None,
-    out=pathlib.Path | None,
-    threshold=0.8,
-    n_jobs=-1,  # allow control of parallelism
+        fasta,
+        atlas_path=pathlib.Path | None,
+        model_path=pathlib.Path | None,
+        out=pathlib.Path | None,
+        threshold=0.8,
+        n_jobs=-1,
 ):
+    """
+    Predict crosstalk for all proteins in a FASTA file.
+
+    Args:
+        fasta (str): Path to the FASTA file with protein sequences.
+        atlas_path (str or None): Path to the NetPhorest atlas file.
+        model_path (str or None): Path to the trained model file.
+        out (str or None): Path to the output TSV file.
+        threshold (float): Probability threshold for reporting crosstalk.
+        n_jobs (int): Number of parallel jobs (-1 for all cores).
+    Returns:
+        None
+    """
     if atlas_path is None:
         atlas_path = DEFAULT_ATLAS_PATH
 

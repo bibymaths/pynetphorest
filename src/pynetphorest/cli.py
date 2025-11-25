@@ -77,7 +77,7 @@ def crosstalk_predict(
         help="Path to netphorest.db (defaults to package-local file)"
     ),
     out: str = typer.Option("crosstalk_predictions.tsv", "--out", help="Output prediction file."),
-    threshold: float = typer.Option(0.5, "--thresh", help="Probability threshold.")
+    threshold: float = typer.Option(0.8, "--thresh", help="Probability threshold.")
 ):
     """
     Predict functional links between phosphorylation sites in the input sequences.
@@ -97,6 +97,34 @@ def crosstalk_predict(
         atlas_path = atlas
 
     crosstalk.predict(fasta, atlas, model, out, threshold)
+
+@crosstalk_app.command("eval")
+def crosstalk_eval(
+    model: str = typer.Option(..., "--model", help="Path to trained .pkl model."),
+    eval_npz: str = typer.Option(..., "--eval-npz", help="eval_data.npz containing X_test/y_test/w_test."),
+    dataset_npz: str = typer.Option(..., "--dataset-npz", help="full_dataset.npz containing full X/y."),
+    predictions_tsv: str = typer.Option(None, "--predictions-tsv", help="Optional predictions TSV file."),
+    metadata: str = typer.Option(None, "--metadata", help="edge_metadata.json or .jsonl"),
+    outdir: str = typer.Option("eval_output", "--outdir", help="Directory to write evaluation figures/tables.")
+):
+    """
+    Evaluate a trained crosstalk model using saved test set + full dataset.
+    Produces plots, metrics, and summaries.
+    """
+    from pathlib import Path
+    from pynetphorest.evaluate import run_evaluation
+
+    # Use outdir/modelname as prefix, e.g. eval_output/crosstalk_model
+    out_prefix = str(Path(outdir) / Path(model).stem)
+
+    run_evaluation(
+        model_path=model,
+        eval_npz_path=eval_npz,
+        dataset_npz_path=dataset_npz,
+        edge_metadata_path=metadata,
+        predictions_tsv_path=predictions_tsv,
+        out_prefix=out_prefix,
+    )
 
 if __name__ == "__main__":
     app()

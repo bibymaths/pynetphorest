@@ -1,12 +1,16 @@
 import gzip
+import json
 import pathlib
 import random
 import pickle
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from sklearn.ensemble import GradientBoostingClassifier
+from itertools import combinations
+from sklearn.ensemble import GradientBoostingClassifier, HistGradientBoostingClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score, roc_auc_score
+from joblib import delayed, Parallel
 from . import core
 
 WINDOW_SIZE = 9
@@ -30,8 +34,8 @@ def load_sequences(fasta_path):
 
 def extract_site_features(seq, pos, aa, models, rrcs=0.0):
     """
-    Generates a feature vector for a single site using NetPhorest logic.
-    Features: [rRCS, Avg_Post, Top5_Post..., Peptide_Encoding...]
+    Features: [Avg_Post, Top5_Post..., Peptide_Encoding...]
+    NetPhorest-only; rRCS is NOT used as an input feature.
     """
     if pos < 0 or pos >= len(seq) or seq[pos] != aa:
         return None
@@ -55,7 +59,8 @@ def extract_site_features(seq, pos, aa, models, rrcs=0.0):
 
     avg_score = sum(scores) / len(scores) if scores else 0.0
 
-    return [rrcs, avg_score] + top_scores + encoded
+    # NOTE: rrcs intentionally NOT included in the feature vector
+    return [avg_score] + top_scores + encoded
 
 
 def parse_ptmcode_line(line, structure="within"):
@@ -100,116 +105,363 @@ def train_model(fasta, within_file, between_file, atlas_path=pathlib.Path | None
     atlas = core.load_atlas(str(atlas_path))
     models = atlas.get("models", []) if isinstance(atlas, dict) else atlas
 
+    models_by_res = {"S": [], "T": [], "Y": []}
+    for m in models:
+        for r in m.get("residues", []):
+            if r in models_by_res:
+                models_by_res[r].append(m)
+
     print("Loading Sequences...")
     sequences = load_sequences(fasta)
     dataset = []
+    edge_metadata = []
 
     files = [(within_file, "within"), (between_file, "between")]
     valid_edges = 0
 
-    print("Processing PTMcode edges...")
-    for fpath, ftype in files:
-        if not fpath: continue
+    site_cache = {}
 
-        # Handle both raw strings and potential file objects if integrated differently later
+
+    def get_site_features(prot, pos, aa, rrcs):
+        """
+        Cached site features.
+        Compute heavy part once per (protein, pos), then just inject rRCS.
+        """
+        key = (prot, pos)
+        base = site_cache.get(key)
+        if base is None:
+            seq = sequences.get(prot)
+            if seq is None:
+                return None
+            used_models = models_by_res.get(aa, models)  # if you use models_by_res
+            base = extract_site_features(seq, pos, aa, used_models, rrcs=0.0)
+            if base is None:
+                return None
+            site_cache[key] = base
+
+        feat = list(base)
+        # feat[0] = rrcs  # overwrite rRCS for this edge
+        # NetPhorest-only features; rRCS not injected here
+        return feat
+
+    print("Processing PTMcode edges...")
+    seq_ids = set(sequences.keys())
+    for fpath, ftype in files:
+        if not fpath:
+            continue
+
         open_func = gzip.open if fpath.endswith(".gz") else open
 
-        with open_func(fpath, 'rt') as f:
+        with open_func(fpath, "rt") as f:
             for line in tqdm(f, desc=f"Parsing {ftype}"):
-                if line.startswith("##"): continue
+                if not line or line[0] == "#":
+                    continue
                 edge = parse_ptmcode_line(line, ftype)
-                if not edge: continue
-
-                if edge['p1'] not in sequences or edge['p2'] not in sequences:
+                if not edge:
                     continue
 
-                feat1 = extract_site_features(sequences[edge['p1']], edge['pos1'], edge['aa1'], models, edge['rrcs1'])
-                feat2 = extract_site_features(sequences[edge['p2']], edge['pos2'], edge['aa2'], models, edge['rrcs2'])
+                # fast reject by protein ID
+                if edge["p1"] not in seq_ids or edge["p2"] not in seq_ids:
+                    continue
+
+                feat1 = get_site_features(edge["p1"], edge["pos1"],
+                                          edge["aa1"], edge["rrcs1"])
+                feat2 = get_site_features(edge["p2"], edge["pos2"],
+                                          edge["aa2"], edge["rrcs2"])
 
                 if feat1 and feat2:
                     combined = feat1 + feat2 + [abs(a - b) for a, b in zip(feat1, feat2)]
                     dataset.append(combined + [1])
+                    edge_metadata.append({
+                        "type": "pos",
+                        "p1": edge["p1"],
+                        "p2": edge["p2"],
+                        "rrcs1": edge["rrcs1"],
+                        "rrcs2": edge["rrcs2"],
+                        "aa1": edge["aa1"],
+                        "aa2": edge["aa2"],
+                        "pos1": edge["pos1"],
+                        "pos2": edge["pos2"]
+                    })
                     valid_edges += 1
 
     print(f"Generated {valid_edges} positive samples. Generating negatives...")
-    neg_count = 0
-    target_neg = valid_edges * NEGATIVE_RATIO
-    keys = list(sequences.keys())
+    neg_count   = 0
+    target_neg  = valid_edges * NEGATIVE_RATIO
 
-    with tqdm(total=target_neg) as pbar:
-        while neg_count < target_neg:
-            prot = random.choice(keys)
-            seq = sequences[prot]
-            sty = [i for i, c in enumerate(seq) if c in "STY"]
-            if len(sty) < 2: continue
+    # Precompute STY positions for each protein ONCE
+    sty_sites = {}
+    for prot, seq in sequences.items():
+        sites = [i for i, c in enumerate(seq) if c in "STY"]
+        if len(sites) >= 2:
+            sty_sites[prot] = sites
 
-            i1, i2 = random.sample(sty, 2)
-            feat1 = extract_site_features(seq, i1, seq[i1], models, rrcs=0.0)
-            feat2 = extract_site_features(seq, i2, seq[i2], models, rrcs=0.0)
+    # Optional: shuffle protein order for randomness
+    prot_list = list(sty_sites.keys())
+    random.shuffle(prot_list)
 
-            if feat1 and feat2:
-                combined = feat1 + feat2 + [abs(a - b) for a, b in zip(feat1, feat2)]
-                dataset.append(combined + [0])
-                neg_count += 1
-                pbar.update(1)
+    with tqdm(total=target_neg, desc="Negatives") as pbar:
+        for prot in prot_list:
+            seq   = sequences[prot]
+            sites = sty_sites[prot]
+
+            # generate all unordered pairs of STY sites in this protein
+            site_pairs = list(combinations(sites, 2))
+            random.shuffle(site_pairs)  # randomize order within protein
+
+            for i1, i2 in site_pairs:
+                aa1 = seq[i1]
+                aa2 = seq[i2]
+
+                feat1 = get_site_features(prot, i1, aa1, rrcs=0.0)
+                feat2 = get_site_features(prot, i2, aa2, rrcs=0.0)
+
+                if feat1 and feat2:
+                    combined = feat1 + feat2 + [abs(a - b) for a, b in zip(feat1, feat2)]
+                    dataset.append(combined + [0])
+                    edge_metadata.append({
+                        "type": "neg",
+                        "p1": prot,
+                        "p2": prot,
+                        "rrcs1": 0.0,
+                        "rrcs2": 0.0,
+                        "aa1": aa1,
+                        "aa2": aa2,
+                        "pos1": i1,
+                        "pos2": i2
+                    })
+                    neg_count += 1
+                    pbar.update(1)
+
+                    if neg_count >= target_neg:
+                        break
+
+            if neg_count >= target_neg:
+                break
+    print("\n=== DATASET SUMMARY ===")
+
+    # Total rows
+    print("Total samples:", len(dataset))
+
+    # Count positives & negatives
+    pos = sum(1 for row in dataset if row[-1] == 1)
+    neg = len(dataset) - pos
+    print("Positives:", pos)
+    print("Negatives:", neg)
+
+    # Dedup check
+    df_temp = pd.DataFrame(dataset)
+    unique_rows = len(df_temp.drop_duplicates())
+    print("Unique samples:", unique_rows)
+
+    # Duplication ratio
+    dup_ratio = 1 - (unique_rows / len(df_temp))
+    print(f"Duplicate ratio: {dup_ratio:.3f}")
+
+    # Feature dimensionality
+    if len(dataset) > 0:
+        print("Feature vector length:", len(dataset[0]) - 1)
+
+    rrcs_pos = [row[0] for row in dataset if row[-1] == 1]
+    rrcs_neg = [row[0] for row in dataset if row[-1] == 0]
+
+    print("RRCS positive mean:", np.mean(rrcs_pos))
+    print("RRCS negative mean:", np.mean(rrcs_neg))
+    print("RRCS positive unique values:", sorted(set(rrcs_pos))[:10])
+    print("RRCS negative unique values:", sorted(set(rrcs_neg))[:10])
 
     df = pd.DataFrame(dataset)
+    df.to_csv("full_dataset.csv", index=False)
     X = df.iloc[:, :-1]
     y = df.iloc[:, -1]
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    weights = []
+    for row_meta in edge_metadata:
+        if row_meta["type"] == "pos":
+            # rRCS-based weighting (scale to ~0–1)
+            w = (row_meta["rrcs1"] + row_meta["rrcs2"]) / 200.0
+            w = max(w, 0.1)  # avoid zero-weights
+            weights.append(w)
+        else:
+            weights.append(1.0)
+
+    with open("edge_metadata.json", "w") as f:
+        for m in edge_metadata:
+            f.write(json.dumps(m) + "\n")
+
+    print("Saved edge_metadata.json")
+
+    df = pd.DataFrame(dataset, dtype="float32")
+    X = df.iloc[:, :-1].to_numpy(dtype="float32")
+    y = df.iloc[:, -1].to_numpy(dtype="int8")
+    weights = np.array(weights, dtype="float32")
+
+    np.savez("full_dataset.npz",
+             X=X,
+             y=y)
+    print("Saved full_dataset.npz with X/y for feature summaries")
+
+    X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
+        X, y, weights,
+        test_size=0.2,
+        stratify=y,
+        random_state=42,
+    )
+
+    # Save evaluation split
+    np.savez("eval_data.npz",
+             X_test=X_test,
+             y_test=y_test,
+             w_test=w_test if 'sample_weight' in locals() else None)
+    print("Saved eval_data.npz with X_test/y_test/w_test")
 
     print("Training Gradient Boosting Classifier...")
-    clf = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1)
-    clf.fit(X_train, y_train)
+
+    # clf = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1)
+
+    clf = HistGradientBoostingClassifier(
+        max_iter=200,
+        learning_rate=0.05,
+        max_depth=6,
+        max_leaf_nodes=31,
+        min_samples_leaf=20,
+        l2_regularization=1.0,
+        early_stopping=True,
+        validation_fraction=0.1,
+        scoring="average_precision",
+        random_state=42
+    )
+    clf.fit(X_train, y_train, sample_weight=w_train)
 
     print("Evaluation:")
     if len(X_test) > 0:
         probs = clf.predict_proba(X_test)[:, 1]
         print(f"AP Score: {average_precision_score(y_test, probs):.4f}")
+        print(f"ROC AUC:    {roc_auc_score(y_test, probs):.4f}")
 
     with open(output_model, "wb") as f:
         pickle.dump(clf, f)
     print(f"Model saved to {output_model}")
 
+def _predict_for_protein(name, seq, models_by_res, models, clf, threshold):
+    """
+    Vectorized crosstalk prediction for one protein.
+    Much faster: builds all pair feature vectors first,
+    then calls predict_proba once (or in chunks).
+    """
+    sites = [i for i, c in enumerate(seq) if c in "STY"]
+    if len(sites) < 2:
+        return []
 
-def predict(fasta, atlas_path=pathlib.Path | None, model_path="crosstalk_model.pkl", out="crosstalk_predictions.tsv",
-            threshold=0.5):
+    # ----- 1) Extract per-site feature vectors -----
+    vectors = {}
+    for site in sites:
+        aa = seq[site]
+        used_models = models_by_res.get(aa, models)
+        vec = extract_site_features(seq, site, aa, used_models, rrcs=0.0)
+        if vec:
+            vectors[site] = vec
+
+    valid_sites = list(vectors.keys())
+    if len(valid_sites) < 2:
+        return []
+
+    # ----- 2) Build all pair feature vectors at once -----
+    pair_features = []
+    pair_meta = []   # (s1, s2)
+
+    for i in range(len(valid_sites)):
+        for j in range(i + 1, len(valid_sites)):
+            s1, s2 = valid_sites[i], valid_sites[j]
+            v1, v2 = vectors[s1], vectors[s2]
+
+            # Combine: v1 + v2 + abs-diff
+            combined = v1 + v2 + [abs(a - b) for a, b in zip(v1, v2)]
+
+            pair_features.append(combined)
+            pair_meta.append((s1, s2))
+
+    if not pair_features:
+        return []
+
+    # Convert to array
+    X_pairs = np.array(pair_features, dtype=np.float32)
+
+    # ----- 3) Vectorized prediction -----
+    # If extremely large, chunk to avoid memory blow-up.
+    # Chunk size can be increased if your machine handles more.
+    CHUNK = 20000
+    probs = []
+
+    for k in range(0, len(X_pairs), CHUNK):
+        p = clf.predict_proba(X_pairs[k:k+CHUNK])[:, 1]
+        probs.append(p)
+
+    probs = np.concatenate(probs)
+
+    # ----- 4) Convert to TSV lines -----
+    lines = []
+    for (s1, s2), prob in zip(pair_meta, probs):
+        aa1 = seq[s1]
+        aa2 = seq[s2]
+
+        if aa1 == aa2 == "S":
+            th = 0.25
+        elif aa1 == aa2 == "Y":
+            th = 0.35
+        else:
+            th = 0.30
+        # if prob >= threshold:
+        if prob >= th:
+            res1 = f"{seq[s1]}{s1 + 1}"
+            res2 = f"{seq[s2]}{s2 + 1}"
+            lines.append(f"{name}\t{res1}\t{res2}\t{prob:.4f}\n")
+
+    return lines
+
+def predict(
+    fasta,
+    atlas_path=pathlib.Path | None,
+    model_path=pathlib.Path | None,
+    out=pathlib.Path | None,
+    threshold=0.8,
+    n_jobs=-1,  # allow control of parallelism
+):
     if atlas_path is None:
         atlas_path = DEFAULT_ATLAS_PATH
+
     print("Loading Atlas and Model...")
     atlas = core.load_atlas(atlas_path)
-    models = atlas.get("models", [])
+
+    # Handle JSON or SQLite atlas
+    models = atlas["models"] if isinstance(atlas, dict) else atlas
+
+    # Build residue-specific model lists, same as in train_model
+    models_by_res = {"S": [], "T": [], "Y": []}
+    for m in models:
+        for r in m.get("residues", []):
+            if r in models_by_res:
+                models_by_res[r].append(m)
 
     with open(model_path, "rb") as f:
         clf = pickle.load(f)
 
     print(f"Predicting crosstalk for {fasta}...")
+    sequences = load_sequences(fasta)
+    items = list(sequences.items())
+
+    # Run per-protein prediction in parallel
+    # Use backend="loky" for true multi-core (separate processes).
+    results = Parallel(n_jobs=n_jobs, backend="loky", verbose=0)(
+        delayed(_predict_for_protein)(name, seq, models_by_res, models, clf, threshold)
+        for name, seq in tqdm(items, desc="Proteins", total=len(items), smoothing=0.1)
+    )
+
+    # Write output once
     with open(out, "w") as f_out:
         f_out.write("Protein\tSite1\tSite2\tCrosstalk_Prob\n")
+        for lines in results:
+            for line in lines:
+                f_out.write(line)
 
-        sequences = load_sequences(fasta)
-        for name, seq in tqdm(sequences.items()):
-            sites = [i for i, c in enumerate(seq) if c in "STY"]
-            if len(sites) < 2: continue
-
-            vectors = {}
-            for site in sites:
-                vec = extract_site_features(seq, site, seq[site], models, rrcs=0.0)
-                if vec:
-                    vectors[site] = vec
-
-            valid_sites = list(vectors.keys())
-            for i in range(len(valid_sites)):
-                for j in range(i + 1, len(valid_sites)):
-                    s1, s2 = valid_sites[i], valid_sites[j]
-                    v1, v2 = vectors[s1], vectors[s2]
-
-                    combined = v1 + v2 + [abs(a - b) for a, b in zip(v1, v2)]
-                    prob = clf.predict_proba([combined])[0][1]
-
-                    if prob > threshold:
-                        res1 = f"{seq[s1]}{s1 + 1}"
-                        res2 = f"{seq[s2]}{s2 + 1}"
-                        f_out.write(f"{name}\t{res1}\t{res2}\t{prob:.4f}\n")
     print(f"Results written to {out}")

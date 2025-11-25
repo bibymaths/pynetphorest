@@ -19,6 +19,23 @@ def netphorest(
                                     help="Enable Writer->Reader causal linking (Kinase recruits Binder).")):
     """
     Run NetPhorest prediction on FASTA sequences.
+    Outputs a TSV file with predicted kinase–substrate relationships.
+
+    Parameters
+    ----------
+    fasta : str
+        Input FASTA file path (or '-' for stdin).
+    out : str, optional
+        Output TSV file path. If not provided, outputs to stdout.
+    atlas : str, optional
+        Path to netphorest.db or .json atlas file. Default is 'netphorest.db'.
+    causal : bool, optional
+        If True, enables Writer->Reader causal linking.
+
+    Returns
+    -------
+    None
+        Writes predictions to the specified output file or stdout.
     """
     from .pynetphorest import main
 
@@ -49,6 +66,25 @@ def crosstalk_train(
 ):
     """
     Train a new pairwise crosstalk model using NetPhorest features + PTMcode2 labels.
+    Generates a .pkl model file for later prediction.
+
+    Parameters
+    ----------
+    fasta : str
+        Input FASTA file path.
+    within : str
+        PTMcode2 'within.gz' file path.
+    between : str
+        PTMcode2 'between.gz' file path.
+    atlas : str, optional
+        Path to netphorest.db file. If None, uses package-local default.
+    model_out : str, optional
+        Output filename for the trained model. Default is 'crosstalk_model.pkl'.
+
+    Returns
+    -------
+    None
+        Saves the trained model to the specified output file.
     """
     try:
         import crosstalk
@@ -81,6 +117,25 @@ def crosstalk_predict(
 ):
     """
     Predict functional links between phosphorylation sites in the input sequences.
+
+    Parameters
+    ----------
+    fasta : str
+        Input FASTA file path.
+    model : str, optional
+        Path to the trained crosstalk model. Default is 'crosstalk_model
+.pkl'.
+    atlas : str, optional
+        Path to netphorest.db file. If None, uses package-local default.
+    out : str, optional
+        Output TSV file path for predictions. Default is 'crosstalk_predictions.tsv'.
+    threshold : float, optional
+        Probability threshold for predicting functional links. Default is 0.8 - conservative.
+
+    Returns
+    -------
+    None
+        Saves the predictions to the specified output file.
     """
     try:
         import crosstalk
@@ -110,6 +165,26 @@ def crosstalk_eval(
     """
     Evaluate a trained crosstalk model using saved test set + full dataset.
     Produces plots, metrics, and summaries.
+
+    Parameters
+    ----------
+    model : str
+        Path to the trained crosstalk model .pkl file.
+    eval_npz : str
+        Path to eval_data.npz file containing X_test, y_test, w_test.
+    dataset_npz : str
+        Path to full_dataset.npz file containing full X and y.
+    predictions_tsv : str, optional
+        Path to optional predictions TSV file.
+    metadata : str, optional
+        Path to edge_metadata.json or .jsonl file.
+    outdir : str, optional
+        Output directory to write evaluation results. Default is 'eval_output'.
+
+    Returns
+    -------
+    None
+        Saves evaluation results to the specified output directory.
     """
     from pathlib import Path
     from pynetphorest.evaluate import run_evaluation
@@ -177,6 +252,32 @@ def crosstalk_sweep_thresh(
     """
     Sweep probability thresholds and compute global + per-residue metrics
     (precision, recall, F1, MCC) on the held-out test set.
+
+    Parameters
+    ----------
+    model : str
+        Path to trained crosstalk model .pkl (default: crosstalk_model.pkl).
+    eval_npz : str
+        Path to eval_data.npz with X_test/y_test (default: eval_data.npz).
+    dataset_npz : str
+        Path to full_dataset.npz with full y (default: full_dataset.npz).
+    metadata : str
+        edge_metadata.json (JSON-lines, one dict per row).
+    min_th : float
+        Minimum decision threshold (default: 0.10).
+    max_th : float
+        Maximum decision threshold (default: 0.90).
+    step : float
+        Threshold step (default: 0.05).
+    out_global : str, optional
+        Optional TSV path for global metrics.
+    out_residues : str, optional
+        Optional TSV path for per-residue metrics.
+
+    Returns
+    -------
+    None
+        Prints tables to stdout and optionally saves TSV files.
     """
 
     from pynetphorest.model_thresh import run_sweep_thresh
@@ -193,8 +294,8 @@ def crosstalk_sweep_thresh(
         out_residues=out_residues,
     )
 
-    # Mirror the script behaviour
     from pynetphorest.model_thresh import print_global_table, print_residue_table
+
     print_global_table(global_rows)
     print_residue_table(residue_rows)
 

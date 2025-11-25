@@ -60,19 +60,7 @@ transparent, scalable, and extendable:
 Everything runs on standard Python 3.10+, with no external C dependencies, and can be integrated into any proteomics or
 systems-biology pipeline.
 
----  
-
-Here is a **clean, minimal, story-driven README extension** that fits a scientific audience and ties everything
-together—biology, method development, and the structure of your package. It keeps your existing content untouched, and
-adds exactly what you asked for: the motivation, the biological problem, and how your solution addresses it.
-
 ---
-
-# pynetphorest
-
-[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-[![Snakemake](https://img.shields.io/badge/workflow-Snakemake-1f77b4.svg)](https://snakemake.github.io)
 
 **Conceptual & data lineage**
 

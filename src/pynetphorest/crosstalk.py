@@ -44,7 +44,7 @@ def extract_site_features(seq, pos, aa, models, rrcs=0.0):
     scores = []
     for model in models:
         # Calculate posterior using core logic
-        score = core.get_model_posterior(peptide, model, seq, pos)
+        score = core.get_model_posterior(seq, pos, model)
         scores.append(score)
 
     scores = sorted(scores, reverse=True)

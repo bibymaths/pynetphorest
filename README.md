@@ -60,33 +60,6 @@ transparent, scalable, and extendable:
 Everything runs on standard Python 3.10+, with no external C dependencies, and can be integrated into any proteomics or
 systems-biology pipeline.
 
----  
-
-Here is a **clean, minimal, story-driven README extension** that fits a scientific audience and ties everything
-together—biology, method development, and the structure of your package. It keeps your existing content untouched, and
-adds exactly what you asked for: the motivation, the biological problem, and how your solution addresses it.
-
----
-
-# pynetphorest
-
-[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-[![Snakemake](https://img.shields.io/badge/workflow-Snakemake-1f77b4.svg)](https://snakemake.github.io)
-
-**Conceptual & data lineage**
-
-This project builds on the ideas, datasets, and foundational work from:
-
-* **PTMcode v2**
-  Minguez et al. (2015) *NAR* — functional associations among PTMs within/between proteins.
-
-* **KinomeXplorer / NetPhorest**
-  Horn et al. (2014) *Nature Methods* — kinase-substrate scoring using neural networks and PSSMs.
-
-* **Foundations of phosphorylation network discovery (NetworKIN)**
-  Linding et al. (2007) *Cell* — integrated signaling logic and sequence context.
-
 ---
 
 ## Why this matters

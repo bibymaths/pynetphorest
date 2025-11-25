@@ -56,7 +56,8 @@ License
 """
 
 from joblib import Parallel, delayed
-import argparse, math, sys, pathlib
+import argparse, math, sys, pathlib, os
+from tqdm import tqdm
 from . import core
 
 def main():
@@ -139,87 +140,151 @@ def main():
     else:
         out_handle = sys.stdout
 
+    # ------------------------------------------------------------
+    # Nested parallelism:
+    #   - outer level: per protein (process-based)
+    #   - inner level: per S/T/Y site (thread-based)
+    # ------------------------------------------------------------
+    def score_position(name, seq_upper, i, res, models):
+        """
+        Score a single S/T/Y position of a protein against all models.
+        Returns list of output lines (can be empty).
+        """
+        out_lines = []
+
+        for model in models:
+            if res not in model["residues"]:
+                continue
+
+            raw_score = 0.0
+
+            if model["type"] == "PSSM":
+                peptide = core.get_window(seq_upper, i, model["window"])
+                indices = core.encode_peptide(peptide)
+                # skip if any index is out of amino-acid range
+                if any(idx > 20 for idx in indices):
+                    continue
+                raw_score = core.score_pssm(
+                    indices,
+                    model["weights"],
+                    model["divisor"],
+                )
+
+            elif model["type"] == "NN":
+                total_nn_score = 0.0
+                valid_ensemble = True
+
+                for net in model["networks"]:
+                    peptide = core.get_window(seq_upper, i, net["window"])
+                    indices = core.encode_peptide(peptide)
+                    if any(idx > 20 for idx in indices):
+                        valid_ensemble = False
+                        break
+                    total_nn_score += core.score_feed_forward(
+                        indices,
+                        net["weights"],
+                        net["window"],
+                        net["hidden"],
+                    )
+
+                if not valid_ensemble:
+                    continue
+
+                raw_score = total_nn_score / model["divisor"]
+
+            if raw_score <= 0.0:
+                continue
+
+            # transform score
+            if model["type"] == "PSSM":
+                log_score = math.log(raw_score)
+            else:
+                log_score = raw_score
+
+            sig = model["sigmoid"]
+            term = sig["slope"] * (sig["inflection"] - log_score)
+            # clamp for numerical stability
+            if term > 50.0:
+                term = 50.0
+            elif term < -50.0:
+                term = -50.0
+
+            posterior = sig["min"] + (sig["max"] - sig["min"]) / (1.0 + math.exp(term))
+
+            if posterior > 0.0:
+                visual = core.get_display_window(seq_upper, i)
+                meta = model["meta"]
+                line = (
+                    f"{name}\t{i + 1}\t{res}\t{visual}\t"
+                    f"{meta['method']}\t{meta['tree']}\t{meta['classifier']}\t"
+                    f"{meta['kinase']}\t{posterior:.6f}\t{meta['prior']:.6f}"
+                )
+                out_lines.append(line)
+
+        return out_lines
+
+    def process_one_protein(name, seq, models, n_inner=None):
+        """
+        Process one protein:
+          - collect all S/T/Y sites
+          - run per-site scoring in parallel (threads) inside this process
+        """
+        seq_upper = seq.upper()
+        positions = [(i, res) for i, res in enumerate(seq_upper) if res in ("S", "T", "Y")]
+
+        if not positions:
+            return []
+
+        # choose inner parallelism (threads)
+        if n_inner is None:
+            # heuristic: a few threads per process, but not crazy
+            n_inner = max(1, min(4, os.cpu_count() or 1))
+
+        # inner parallel: per-site, thread-based
+        site_results = Parallel(
+            n_jobs=n_inner,
+            backend="threading",
+        )(
+            delayed(score_position)(name, seq_upper, i, res, models)
+            for (i, res) in tqdm(positions, desc=f"{name} sites", leave=False)
+        )
+
+        # flatten
+        out_lines = []
+        for lines in site_results:
+            if lines:
+                out_lines.extend(lines)
+        return out_lines
+
+    # ------------------------------------------------------------
+    # Outer-level parallelism: per protein (process-based)
+    # ------------------------------------------------------------
+    seq_items = list(sequences.items())
+
+    if len(seq_items) < 2:
+        # small input: no outer processes, but keep inner threading
+        results = [
+            process_one_protein(name, seq, models, n_inner=max(1, (os.cpu_count() or 1) // 2))
+            for name, seq in seq_items
+        ]
+    else:
+        # outer processes, inner threads
+        results = Parallel(n_jobs=-1, prefer="processes")(
+            delayed(process_one_protein)(name, seq, models)
+            for name, seq in tqdm(seq_items, desc="Proteins")
+        )
+
+    # write results
     # Write Header
     header = "# Name\tPosition\tResidue\tPeptide\tMethod\tTree\tClassifier\tPosterior\tPrior"
     out_handle.write(header + "\n")
 
-    def process_one_protein(name, seq, models):
-        out_lines = []
-        seq_upper = seq.upper()
-
-        for i, res in enumerate(seq_upper):
-            if res not in ['S', 'T', 'Y']:
-                continue
-
-            for model in models:
-                if res not in model['residues']:
-                    continue
-
-                raw_score = 0.0
-
-                if model['type'] == 'PSSM':
-                    peptide = core.get_window(seq_upper, i, model['window'])
-                    indices = core.encode_peptide(peptide)
-                    if any(idx > 20 for idx in indices):
-                        continue
-                    raw_score = core.score_pssm(indices, model['weights'], model['divisor'])
-
-                elif model['type'] == 'NN':
-                    total_nn_score = 0.0
-                    valid_ensemble = True
-
-                    for net in model['networks']:
-                        peptide = core.get_window(seq_upper, i, net['window'])
-                        indices = core.encode_peptide(peptide)
-                        if any(idx > 20 for idx in indices):
-                            valid_ensemble = False
-                            break
-                        total_nn_score += core.score_feed_forward(
-                            indices, net['weights'], net['window'], net['hidden']
-                        )
-
-                    if not valid_ensemble:
-                        continue
-
-                    raw_score = total_nn_score / model['divisor']
-
-                if raw_score <= 0:
-                    continue
-
-                if model['type'] == 'PSSM':
-                    log_score = math.log(raw_score)
-                else:
-                    log_score = raw_score
-
-                sig = model['sigmoid']
-                term = sig['slope'] * (sig['inflection'] - log_score)
-                if term > 50: term = 50.0
-                if term < -50: term = -50.0
-
-                posterior = sig['min'] + (sig['max'] - sig['min']) / (1.0 + math.exp(term))
-
-                if posterior > 0.0:
-                    visual = core.get_display_window(seq_upper, i)
-                    meta = model['meta']
-                    line = (f"{name}\t{i + 1}\t{res}\t{visual}\t"
-                            f"{meta['method']}\t{meta['tree']}\t{meta['classifier']}\t"
-                            f"{meta['kinase']}\t{posterior:.6f}\t{meta['prior']:.6f}")
-                    out_lines.append(line)
-
-        return out_lines
-
-
-    # run per-protein in parallel, max cores
-    results = Parallel(n_jobs=-1, prefer="processes")(
-        delayed(process_one_protein)(name, seq, models)
-        for name, seq in sequences.items()
-    )
-
-    # write results (flatten list of lists)
     for lines in results:
         for line in lines:
             out_handle.write(line + "\n")
 
+    if out_handle is not sys.stdout:
+        out_handle.close()
 
 if __name__ == "__main__":
     main()

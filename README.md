@@ -62,21 +62,6 @@ systems-biology pipeline.
 
 ---
 
-**Conceptual & data lineage**
-
-This project builds on the ideas, datasets, and foundational work from:
-
-* **PTMcode v2**
-  Minguez et al. (2015) *NAR* — functional associations among PTMs within/between proteins.
-
-* **KinomeXplorer / NetPhorest**
-  Horn et al. (2014) *Nature Methods* — kinase-substrate scoring using neural networks and PSSMs.
-
-* **Foundations of phosphorylation network discovery (NetworKIN)**
-  Linding et al. (2007) *Cell* — integrated signaling logic and sequence context.
-
----
-
 ## Why this matters
 
 Protein phosphorylation is one of the most information-dense regulatory systems in biology. Every signaling

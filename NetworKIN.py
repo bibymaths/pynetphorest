@@ -299,23 +299,29 @@ def parseNetphorestFile(filename, id_pos_res, save_diskspace=True):
                 except ValueError:
                     continue
 
-                # FIX: Handle pynetphorest output columns
-                # pynetphorest: Name(0), Pos(1), Res(2), Pep(3), Method(4), Tree(5), Classifier(6), Posterior(7/8)
                 try:
                     res = tokens[2]
                     peptide = tokens[3]
-                    # method = tokens[4]
-                    tree = tokens[5]
-                    pred = tokens[6]
-                    # Check index for posterior (differs slightly based on pynetphorest args)
-                    # pynetphorest with --causal adds columns. Standard is index 7 or 8.
-                    # We look for the float value.
+                    # tokens[4] is Method ('nn')
+                    # tokens[5] is Organism ('human') -> SKIP THIS
+
+                    # If the file has the organism column (length > 8), shift indices
+                    if len(tokens) >= 9:
+                        tree = tokens[6]  # Index 6
+                        pred = tokens[7]  # Index 7
+                        score_idx = 8  # Index 8
+                    else:
+                        # Fallback for files without the organism column
+                        tree = tokens[5]
+                        pred = tokens[6]
+                        score_idx = 7
+
                     score = 0.0
-                    if len(tokens) > 7:
-                        try:
-                            score = float(tokens[7])
-                        except ValueError:
-                            if len(tokens) > 8: score = float(tokens[8])
+                    try:
+                        score = float(tokens[score_idx])
+                    except ValueError:
+                        score = 0.0
+
                 except IndexError:
                     sys.stderr.write(f"Line parsing error: {tokens}\n")
                     continue
@@ -466,16 +472,27 @@ def loadSTRINGdata(string2incoming, datadir, number_of_processes):
 
                 if not (string2 and string1): continue
 
-                if (string2 in string2incoming):
-                    if string2 not in tree_pred_string_data:
-                        tree_pred_string_data[string2] = {}
+                # OLD:
+                # if (string2 in string2incoming):
+                #     if string2 not in tree_pred_string_data:
+                #         tree_pred_string_data[string2] = {}
+                #     if string1 not in tree_pred_string_data[string2]:
+                #         tree_pred_string_data[string2][string1] = {"_name": name}
+                #     score_val = float(stringscore) if options.path == "direct" else float(stringscore_indirect)
+                #     tree_pred_string_data[string2][string1]["_score"] = score_val
+                #     tree_pred_string_data[string2][string1]["_path"]  = path
 
-                    if string1 not in tree_pred_string_data[string2]:
-                        tree_pred_string_data[string2][string1] = {"_name": name}
+                # NEW: index by string1 (target), since printResult expects tree_pred_string_data[string1][string2]
+                if not string2incoming or string1 in string2incoming:
+                    if string1 not in tree_pred_string_data:
+                        tree_pred_string_data[string1] = {}
+
+                    if string2 not in tree_pred_string_data[string1]:
+                        tree_pred_string_data[string1][string2] = {"_name": name}
 
                     score_val = float(stringscore) if options.path == "direct" else float(stringscore_indirect)
-                    tree_pred_string_data[string2][string1]["_score"] = score_val
-                    tree_pred_string_data[string2][string1]["_path"] = path
+                    tree_pred_string_data[string1][string2]["_score"] = score_val
+                    tree_pred_string_data[string1][string2]["_path"] = path
 
     except Exception as e:
         sys.stderr.write(f"Error reading STRING data: {e}\n")

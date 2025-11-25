@@ -462,13 +462,16 @@ def run_evaluation(
 
     Parameters mirror the CLI flags, but are plain strings.
     """
-    os.makedirs(out_prefix, exist_ok=True)
     model_path = Path(model_path)
 
     if out_prefix is None:
-        out_prefix_path = model_path.with_suffix("")  # e.g. crosstalk_model
+        # default: same folder as model, stem as prefix
+        out_prefix_path = model_path.with_suffix("")  # e.g. results/crosstalk_model
     else:
         out_prefix_path = Path(out_prefix)
+
+    # Make sure only the *directory* exists
+    out_prefix_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Load model
     print(f"Loading model from {model_path}")

@@ -1,0 +1,25 @@
+# Which branch to run: netphorest / crosstalk / both
+mode: both
+
+# Where to store ALL outputs (relative to repo root)
+results_dir: results
+
+# CLI entry point for the Typer app
+pynetphorest_bin: "app"
+
+# Shared inputs
+fasta: data/proteins.fasta              # your input FASTA file
+atlas: src/pynetphorest/netphorest.db   # atlas path
+
+# NetPhorest settings
+netphorest_out_basename: netphorest
+netphorest_causal: true                 # also run --causal variant
+
+# Crosstalk settings
+ptm_within: data/ptmcode2/within.gz
+ptm_between: data/ptmcode2/between.gz
+
+crosstalk_model_name: crosstalk_model.pkl
+crosstalk_predictions_name: crosstalk_predictions.tsv
+crosstalk_threshold: 0.30
+crosstalk_eval_dir: eval

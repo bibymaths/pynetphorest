@@ -126,5 +126,77 @@ def crosstalk_eval(
         out_prefix=out_prefix,
     )
 
+@crosstalk_app.command("model-thresh")
+def crosstalk_sweep_thresh(
+    model: str = typer.Option(
+        "crosstalk_model.pkl",
+        "--model",
+        help="Path to trained crosstalk model .pkl (default: crosstalk_model.pkl)",
+    ),
+    eval_npz: str = typer.Option(
+        "eval_data.npz",
+        "--eval-npz",
+        help="Path to eval_data.npz with X_test/y_test (default: eval_data.npz)",
+    ),
+    dataset_npz: str = typer.Option(
+        "full_dataset.npz",
+        "--dataset-npz",
+        help="Path to full_dataset.npz with full y (default: full_dataset.npz)",
+    ),
+    metadata: str = typer.Option(
+        "edge_metadata.json",
+        "--metadata",
+        help="edge_metadata.json (JSON-lines, one dict per row).",
+    ),
+    min_th: float = typer.Option(
+        0.10,
+        "--min-th",
+        help="Minimum decision threshold (default: 0.10)",
+    ),
+    max_th: float = typer.Option(
+        0.90,
+        "--max-th",
+        help="Maximum decision threshold (default: 0.90)",
+    ),
+    step: float = typer.Option(
+        0.05,
+        "--step",
+        help="Threshold step (default: 0.05)",
+    ),
+    out_global: str | None = typer.Option(
+        None,
+        "--out-global",
+        help="Optional TSV path for global metrics.",
+    ),
+    out_residues: str | None = typer.Option(
+        None,
+        "--out-residues",
+        help="Optional TSV path for per-residue metrics.",
+    ),
+):
+    """
+    Sweep probability thresholds and compute global + per-residue metrics
+    (precision, recall, F1, MCC) on the held-out test set.
+    """
+
+    from pynetphorest.model_thresh import run_sweep_thresh
+
+    global_rows, residue_rows = run_sweep_thresh(
+        model=model,
+        eval_npz=eval_npz,
+        full_npz=dataset_npz,
+        meta_json=metadata,
+        min_th=min_th,
+        max_th=max_th,
+        step=step,
+        out_global=out_global,
+        out_residues=out_residues,
+    )
+
+    # Mirror the script behaviour
+    from pynetphorest.model_thresh import print_global_table, print_residue_table
+    print_global_table(global_rows)
+    print_residue_table(residue_rows)
+
 if __name__ == "__main__":
     app()

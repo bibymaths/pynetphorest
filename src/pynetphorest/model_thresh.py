@@ -277,71 +277,29 @@ def write_tsv(path: str, header: List[str], rows: List[Dict]) -> None:
             f.write("\t".join(fields) + "\n")
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description=(
-            "Sweep thresholds and compute global + per-residue metrics "
-            "including MCC."
-        )
-    )
-    parser.add_argument(
-        "--model",
-        default="crosstalk_model.pkl",
-        help="Path to trained model pickle (default: crosstalk_model.pkl)",
-    )
-    parser.add_argument(
-        "--eval",
-        default="eval_data.npz",
-        help="Path to eval_data.npz (default: eval_data.npz)",
-    )
-    parser.add_argument(
-        "--full",
-        default="full_dataset.npz",
-        help="Path to full_dataset.npz (y array) (default: full_dataset.npz)",
-    )
-    parser.add_argument(
-        "--meta",
-        default="edge_metadata.json",
-        help="Path to edge_metadata.json (default: edge_metadata.json)",
-    )
-    parser.add_argument(
-        "--min-th",
-        type=float,
-        default=0.10,
-        help="Minimum threshold (default: 0.10)",
-    )
-    parser.add_argument(
-        "--max-th",
-        type=float,
-        default=0.90,
-        help="Maximum threshold (default: 0.90)",
-    )
-    parser.add_argument(
-        "--step",
-        type=float,
-        default=0.05,
-        help="Threshold step (default: 0.05)",
-    )
-    parser.add_argument(
-        "--out-global",
-        default=None,
-        help="Optional path to write global metrics as TSV.",
-    )
-    parser.add_argument(
-        "--out-residues",
-        default=None,
-        help="Optional path to write per-residue metrics as TSV.",
-    )
+def run_sweep_thresh(
+    model: str = "crosstalk_model.pkl",
+    eval_npz: str = "eval_data.npz",
+    full_npz: str = "full_dataset.npz",
+    meta_json: str = "edge_metadata.json",
+    min_th: float = 0.10,
+    max_th: float = 0.90,
+    step: float = 0.05,
+    out_global: str | None = None,
+    out_residues: str | None = None,
+):
+    """
+    Programmatic entry point for threshold sweep.
 
-    args = parser.parse_args()
-
+    Returns (global_rows, residue_rows), where each is a list[dict].
+    """
     # Load pieces
-    clf = load_model(args.model)
-    X_test, y_test = load_eval_data(args.eval)
-    y_all = load_full_dataset(args.full)
-    meta_all = load_edge_metadata(args.meta)
+    clf = load_model(model)
+    X_test, y_test = load_eval_data(eval_npz)
+    y_all = load_full_dataset(full_npz)
+    meta_all = load_edge_metadata(meta_json)
 
-    # Sanity check
+    # Sanity checks
     if len(y_all) != len(meta_all):
         raise RuntimeError(
             f"Mismatch: y_all has {len(y_all)} samples but edge_metadata.json "
@@ -358,10 +316,10 @@ def main():
 
     residue_groups = build_residue_groups_for_test(meta_all, idx_test)
 
-    # Get probabilities on X_test once
+    # Get probabilities once
     probs = clf.predict_proba(X_test)[:, 1]
 
-    thresholds = np.arange(args.min_th, args.max_th + 1e-9, args.step)
+    thresholds = np.arange(min_th, max_th + 1e-9, step)
 
     global_rows, residue_rows = eval_thresholds(
         probs=probs,
@@ -370,12 +328,8 @@ def main():
         thresholds=thresholds,
     )
 
-    # Print to stdout
-    print_global_table(global_rows)
-    print_residue_table(residue_rows)
-
     # Optional TSV outputs
-    if args.out_global:
+    if out_global:
         header_g = [
             "threshold",
             "precision",
@@ -389,9 +343,9 @@ def main():
             "pred_pos",
             "n",
         ]
-        write_tsv(args.out_global, header_g, global_rows)
+        write_tsv(out_global, header_g, global_rows)
 
-    if args.out_residues:
+    if out_residues:
         header_r = [
             "threshold",
             "group",
@@ -406,7 +360,43 @@ def main():
             "tn",
             "fn",
         ]
-        write_tsv(args.out_residues, header_r, residue_rows)
+        write_tsv(out_residues, header_r, residue_rows)
+
+    return global_rows, residue_rows
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Sweep thresholds and compute global + per-residue metrics "
+            "including MCC."
+        )
+    )
+    parser.add_argument("--model", default="crosstalk_model.pkl")
+    parser.add_argument("--eval",  default="eval_data.npz")
+    parser.add_argument("--full",  default="full_dataset.npz")
+    parser.add_argument("--meta",  default="edge_metadata.json")
+    parser.add_argument("--min-th", type=float, default=0.10)
+    parser.add_argument("--max-th", type=float, default=0.90)
+    parser.add_argument("--step",   type=float, default=0.05)
+    parser.add_argument("--out-global",   default=None)
+    parser.add_argument("--out-residues", default=None)
+    args = parser.parse_args()
+
+    global_rows, residue_rows = run_sweep_thresh(
+        model=args.model,
+        eval_npz=args.eval,
+        full_npz=args.full,
+        meta_json=args.meta,
+        min_th=args.min_th,
+        max_th=args.max_th,
+        step=args.step,
+        out_global=args.out_global,
+        out_residues=args.out_residues,
+    )
+
+    # Print to stdout like before
+    print_global_table(global_rows)
+    print_residue_table(residue_rows)
 
 
 if __name__ == "__main__":

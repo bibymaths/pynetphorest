@@ -1,0 +1,110 @@
+cff-version: 1.2.0
+message: >
+  If you use pynetphorest in your research, please cite this software
+  alongside the foundational NetPhorest / KinomeXplorer, PTMcode v2,
+  and NetworKIN phosphorylation network discovery papers.
+title: "pynetphorest: modern NetPhorest-style scoring and phosphorylation crosstalk modeling in Python"
+version: "0.1.0"
+type: software
+
+authors:
+  - family-names: Mishra
+    given-names: Abhinav
+    email: mishraabhinav36@gmail.com
+    orcid: "https://orcid.org//0009-0005-3179-7408"
+
+repository-code: "https://github.com/bibymaths/pynetphorest"
+license: "BSD-3-Clause"
+
+keywords:
+  - NetPhorest
+  - kinase
+  - phosphorylation
+  - crosstalk
+  - proteomics
+  - phosphoproteomics
+  - signal transduction
+  - network biology
+
+abstract: >
+  pynetphorest is a modern Python toolkit that re-implements and extends
+  the NetPhorest family of methods, enabling scalable kinase–substrate
+  motif scoring, causal Writer→Reader inference, and machine-learning-based
+  phosphorylation crosstalk prediction. The package includes a unified CLI,
+  Snakemake workflows, threshold-sweep evaluation, and reproducible pipelines
+  for proteome-wide analysis using NetPhorest atlases and PTMcode2 phosphorylation
+  networks.
+
+
+preferred-citation:
+  type: software
+  title: "pynetphorest"
+  authors:
+    - family-names: Mishra
+      given-names: Abhinav
+  year: 2025
+  version: "0.1.0"
+  repository-code: "https://github.com/<YOUR_GH_USERNAME>/pynetphorest"
+
+references:
+
+  - type: article
+    title: "PTMcode v2: a resource for functional associations of post-translational modifications within and between proteins"
+    authors:
+      - family-names: Minguez
+        given-names: Pablo
+      - family-names: Letunic
+        given-names: Ivica
+      - family-names: Parca
+        given-names: Luca
+      - family-names: Garcia-Alonso
+        given-names: Luz
+      - family-names: Dopazo
+        given-names: Joaquin
+      - family-names: Huerta-Cepas
+        given-names: Jaime
+      - family-names: Bork
+        given-names: Peer
+    journal: "Nucleic Acids Research"
+    year: 2015
+    volume: "43"
+    issue: "Database issue"
+    pages: "D494–D502"
+    doi: "10.1093/nar/gku1081"
+
+  - type: article
+    title: "KinomeXplorer: an integrated platform for kinome biology studies"
+    authors:
+      - family-names: Horn
+        given-names: Heiko
+      - family-names: Schoof
+        given-names: Erwin M.
+      - family-names: Kim
+        given-names: Jinwoo
+    journal: "Nature Methods"
+    year: 2014
+    volume: "11"
+    pages: "603–604"
+    doi: "10.1038/nmeth.2968"
+
+  - type: article
+    title: "Systematic discovery of in vivo phosphorylation networks"
+    authors:
+      - family-names: Linding
+        given-names: Rune
+      - family-names: Jensen
+        given-names: Lars Juhl
+      - family-names: Ostheimer
+        given-names: Gernot J.
+      - family-names: van Vugt
+        given-names: Marcel A.
+      - family-names: Jørgensen
+        given-names: Claus
+      - family-names: Miron
+        given-names: I. Michael
+    journal: "Cell"
+    year: 2007
+    volume: "129"
+    issue: "7"
+    pages: "1415–1426"
+    doi: "10.1016/j.cell.2007.05.052"

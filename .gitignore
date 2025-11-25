@@ -1,0 +1,13 @@
+.venv
+*.lock
+*.egg-info
+results*/
+run*/
+__pycache__/
+.ipynb_checkpoints
+.DS_Store
+.vscode
+.env
+.env.*
+.idea
+*.iml

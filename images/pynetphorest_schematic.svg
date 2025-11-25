@@ -1,0 +1,114 @@
+<svg width="900" height="880" viewBox="0 0 900 880" xmlns="http://www.w3.org/2000/svg">
+
+<!--  &lt;!&ndash; TITLE &ndash;&gt;-->
+<!--  <text x="450" y="40" font-size="28" font-family="Arial" font-weight="bold" text-anchor="middle">-->
+<!--    pynetphorest: System Overview-->
+<!--  </text>-->
+
+  <!-- Load Atlas -->
+  <rect x="300" y="80" width="300" height="80" rx="10" fill="#e6f0ff" stroke="#2f6fff"/>
+  <text x="450" y="110" font-size="18" font-family="Arial" text-anchor="middle">
+    NetPhorest Atlas (SQLite/JSON)
+  </text>
+  <text x="450" y="135" font-size="12" font-family="Arial" fill="#333" text-anchor="middle">
+    Kinase NN + PSSM Models · Calibration Params
+  </text>
+
+  <!-- Arrow -->
+  <line x1="450" y1="160" x2="450" y2="190" stroke="black" stroke-width="2"/>
+  <polygon points="450,190 445,180 455,180" fill="black"/>
+
+  <!-- Sequence Scan -->
+  <rect x="280" y="190" width="340" height="80" rx="10" fill="#e8ffe8" stroke="#33aa33"/>
+  <text x="450" y="220" font-size="18" font-family="Arial" text-anchor="middle">
+    Sequence Scan (FASTA)
+  </text>
+  <text x="450" y="245" font-size="14" font-family="Arial" fill="#333" text-anchor="middle">
+    Detect S/T/Y sites · Extract windows
+  </text>
+
+  <!-- Branch Arrows -->
+  <line x1="450" y1="270" x2="200" y2="310" stroke="black" stroke-width="2"/>
+  <line x1="450" y1="270" x2="450" y2="310" stroke="black" stroke-width="2"/>
+  <line x1="450" y1="270" x2="700" y2="310" stroke="black" stroke-width="2"/>
+
+  <!-- Classic Mode -->
+  <rect x="100" y="310" width="250" height="110" rx="10" fill="#fff5e6" stroke="#cc8400"/>
+  <text x="225" y="345" font-size="18" font-family="Arial" text-anchor="middle">
+    Classic Mode
+  </text>
+  <text x="225" y="370" font-size="14" font-family="Arial" fill="#333" text-anchor="middle">
+    Kinase → Site Scoring
+  </text>
+  <text x="225" y="390" font-size="13" font-family="Arial" fill="#333" text-anchor="middle">
+    NN/PSSM Posteriors
+  </text>
+
+  <!-- Causal Mode -->
+  <rect x="325" y="310" width="250" height="110" rx="10" fill="#fff0f6" stroke="#cc3385"/>
+  <text x="450" y="345" font-size="18" font-family="Arial" text-anchor="middle">
+    Causal Mode
+  </text>
+  <text x="450" y="370" font-size="14" font-family="Arial" fill="#333" text-anchor="middle">
+    Writer → Reader
+  </text>
+  <text x="450" y="390" font-size="13" font-family="Arial" fill="#333" text-anchor="middle">
+    Kinase + Binder Logic
+  </text>
+
+  <!-- Crosstalk ML -->
+  <rect x="550" y="310" width="250" height="110" rx="10" fill="#eef5ff" stroke="#4455cc"/>
+  <text x="675" y="345" font-size="18" font-family="Arial" text-anchor="middle">
+    ML Crosstalk Model
+  </text>
+  <text x="675" y="370" font-size="14" font-family="Arial" fill="#333" text-anchor="middle">
+    PTMcode2 Training Data
+  </text>
+  <text x="675" y="390" font-size="13" font-family="Arial" fill="#333" text-anchor="middle">
+    Feature Build · HGB Classifier
+  </text>
+
+  <!-- Merge arrow -->
+  <line x1="225" y1="420" x2="450" y2="460" stroke="black" stroke-width="2"/>
+  <line x1="450" y1="420" x2="450" y2="460" stroke="black" stroke-width="2"/>
+  <line x1="675" y1="420" x2="450" y2="460" stroke="black" stroke-width="2"/>
+
+  <!-- Unified Output -->
+  <rect x="250" y="460" width="400" height="120" rx="10" fill="#f2f2f2" stroke="#444"/>
+  <text x="450" y="495" font-size="18" font-family="Arial" text-anchor="middle">
+    Unified Output Layer
+  </text>
+  <text x="450" y="520" font-size="13" font-family="Arial" fill="#333" text-anchor="middle">
+    TSV Predictions · NPZ Datasets · Plots (PR/ROC/MCC)
+  </text>
+  <text x="450" y="540" font-size="13" font-family="Arial" fill="#333" text-anchor="middle">
+    Subgroup Metrics (S/T/Y, structure)
+  </text>
+
+  <!-- Arrow -->
+  <line x1="450" y1="580" x2="450" y2="610" stroke="black" stroke-width="2"/>
+  <polygon points="450,610 445,600 455,600" fill="black"/>
+
+  <!-- Snakemake -->
+  <rect x="250" y="610" width="400" height="110" rx="10" fill="#e8e8ff" stroke="#6666ff"/>
+  <text x="450" y="645" font-size="18" font-family="Arial" text-anchor="middle">
+    Snakemake Pipeline
+  </text>
+  <text x="450" y="670" font-size="14" font-family="Arial" fill="#333" text-anchor="middle">
+    End-to-end workflows for classic/causal/ML modes
+  </text>
+
+  <!-- Final Arrow -->
+  <line x1="450" y1="720" x2="450" y2="750" stroke="black" stroke-width="2"/>
+  <polygon points="450,750 445,740 455,740" fill="black"/>
+
+  <!-- User -->
+  <rect x="350" y="750" width="200" height="80" rx="10" fill="#fff" stroke="#000"/>
+  <text x="450" y="785" font-size="18" font-family="Arial" text-anchor="middle">
+    User / Researcher
+  </text>
+  <text x="450" y="810" font-size="10" font-family="Arial" fill="#333" text-anchor="middle">
+    CLI Python API · Workflow Integration
+  </text>
+
+</svg>

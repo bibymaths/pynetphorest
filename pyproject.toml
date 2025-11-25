@@ -1,0 +1,38 @@
+[project]
+name = "pynetphorest"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "joblib>=1.5.2",
+    "matplotlib>=3.10.7",
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "scikit-learn>=1.7.2",
+    "snakemake>=7.32.4",
+    "tqdm>=4.67.1",
+    "typer>=0.12,<1.0",
+]
+authors = [
+    { name = "Abhinav Mishra", email = "mishraabhinav36@gmail.com" }
+]
+
+[project.scripts]
+app = "pynetphorest:app"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "ipykernel>=6.29.0",
+]

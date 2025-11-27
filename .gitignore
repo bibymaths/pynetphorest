@@ -11,3 +11,12 @@ __pycache__/
 .env.*
 .idea
 *.iml
+*.pyc
+fit*/
+*.tsv
+*.csv
+logs*/
+*.log
+*.npz
+*.png
+*.svg

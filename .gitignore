@@ -17,3 +17,6 @@ fit*/
 *.csv
 logs*/
 *.log
+*.npz
+*.png
+*.svg

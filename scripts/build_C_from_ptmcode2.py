@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 import gzip
-import pandas as pd
-import numpy as np
 import argparse
-import re
+import sqlite3
 
 
 def load_within(path):
+    """
+    PTMcode2 'within' file.
+    Returns list of (protein, residue1, score1, protein, residue2, score2)
+    for Homo sapiens phosphorylation–phosphorylation pairs.
+    """
     rows = []
     with gzip.open(path, "rt") as f:
         for line in f:
@@ -23,7 +26,7 @@ def load_within(path):
             if parts[2] != "phosphorylation" or parts[6] != "phosphorylation":
                 continue
 
-            res1 = parts[3]  # e.g. Y535
+            res1 = parts[3]   # e.g. Y535
             r1 = float(parts[4])
             res2 = parts[7]
             r2 = float(parts[8])
@@ -33,6 +36,11 @@ def load_within(path):
 
 
 def load_between(path):
+    """
+    PTMcode2 'between' file.
+    Returns list of (protein1, residue1, score1, protein2, residue2, score2)
+    for Homo sapiens phosphorylation–phosphorylation pairs.
+    """
     rows = []
     with gzip.open(path, "rt") as f:
         for line in f:
@@ -58,116 +66,112 @@ def load_between(path):
     return rows
 
 
-def extract_pos(res_str):
-    """
-    Extract integer position from residue string like 'Y535' or 'S1173'.
-    Returns None if it fails.
-    """
-    m = re.match(r"[A-Z]([0-9]+)", res_str)
-    if not m:
-        return None
-    return int(m.group(1))
+def init_intra_db(path):
+    conn = sqlite3.connect(path)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS intra_pairs (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            protein  TEXT NOT NULL,
+            residue1 TEXT NOT NULL,
+            score1   REAL NOT NULL,
+            residue2 TEXT NOT NULL,
+            score2   REAL NOT NULL
+        )
+        """
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_intra_protein ON intra_pairs(protein)")
+    conn.commit()
+    return conn
+
+
+def init_inter_db(path):
+    conn = sqlite3.connect(path)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS inter_pairs (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            protein1  TEXT NOT NULL,
+            residue1  TEXT NOT NULL,
+            score1    REAL NOT NULL,
+            protein2  TEXT NOT NULL,
+            residue2  TEXT NOT NULL,
+            score2    REAL NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_inter_proteins "
+        "ON inter_pairs(protein1, protein2)"
+    )
+    conn.commit()
+    return conn
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--protein", required=True)
-    parser.add_argument("--within", required=True)
-    parser.add_argument("--between", required=True)
-    parser.add_argument("--out-global", default="C_ptm.tsv",
-                        help="Output PTM-based C matrix (global).")
-    parser.add_argument("--out-local", default="C_dist.tsv",
-                        help="Output distance-based C matrix (local).")
-    parser.add_argument("--list-out", default="sites.tsv")
-    parser.add_argument("--length-scale", type=float, default=50.0,
-                        help="Length scale L (aa) for distance kernel exp(-|i-j|/L).")
+    parser = argparse.ArgumentParser(
+        description="Build SQLite DBs of PTMcode2 intra/inter phospho pairs."
+    )
+    parser.add_argument("--within", required=True,
+                        help="Gzipped PTMcode2 'within' file.")
+    parser.add_argument("--between", required=True,
+                        help="Gzipped PTMcode2 'between' file.")
+    parser.add_argument("--out-intra", default="ptm_intra.db",
+                        help="Output SQLite DB for intra-protein pairs.")
+    parser.add_argument("--out-inter", default="ptm_inter.db",
+                        help="Output SQLite DB for inter-protein pairs.")
     args = parser.parse_args()
 
-    print("[*] Loading PTMcode2 within...")
+    print("[*] Loading PTMcode2 within (intra-protein) ...")
     W = load_within(args.within)
+    print(f"[*] Loaded {len(W)} intra-protein phosphorylation pairs.")
 
-    print("[*] Loading PTMcode2 between...")
+    print("[*] Loading PTMcode2 between (inter-protein) ...")
     B = load_between(args.between)
-
-    rows = W + B
-    print(f"[*] Total phosphorylation pairs loaded: {len(rows)}")
-
-    prot = args.protein
-
-    # ---- FILTER: keep ONLY EGFR–EGFR pairs (intra-protein) ----
-    rows = [(p1, res1, r1, p2, res2, r2)
-            for (p1, res1, r1, p2, res2, r2) in rows
-            if (p1 == prot and p2 == prot)]
-
-    print(f"[*] Pairs after filtering for {prot}-{prot}: {len(rows)}")
-    if not rows:
-        raise ValueError(f"No PTM pairs found for protein {prot}")
-
-    # Collect EGFR sites
-    site_set = set()
-    for p1, res1, r1, p2, res2, r2 in rows:
-        site_set.add(f"{p1}_{res1}")
-        site_set.add(f"{p2}_{res2}")
-
-    site_list = sorted(site_set)
-    N = len(site_list)
-    print(f"[*] Total unique EGFR sites: {N}")
-
-    idx = {s: i for i, s in enumerate(site_list)}
+    print(f"[*] Loaded {len(B)} inter-protein phosphorylation pairs.")
 
     # ------------------------------------------------------------------
-    # 1) PTM-based C (GLOBAL): exactly what you already had
+    # Write intra-protein pairs DB
     # ------------------------------------------------------------------
-    C_ptm = np.zeros((N, N), dtype=float)
-    for p1, res1, r1, p2, res2, r2 in rows:
-        s1 = f"{p1}_{res1}"
-        s2 = f"{p2}_{res2}"
-        i, j = idx[s1], idx[s2]
+    print(f"[*] Initialising intra DB: {args.out_intra}")
+    conn_intra = init_intra_db(args.out_intra)
+    cur_intra = conn_intra.cursor()
 
-        score = 0.8 * (r1 + r2) / 200.0   # your original scoring
-        C_ptm[i, j] = max(C_ptm[i, j], score)
-        C_ptm[j, i] = max(C_ptm[j, i], score)
-
-    # ------------------------------------------------------------------
-    # 2) Distance-based C (LOCAL): from residue positions only
-    # ------------------------------------------------------------------
-    # extract positions from strings like 'EGFR_Y1173'
-    positions = []
-    for s in site_list:
-        _, res = s.split("_", 1)  # 'EGFR', 'Y1173'
-        pos = extract_pos(res)
-        if pos is None:
-            raise ValueError(f"Could not parse position from residue '{res}'")
-        positions.append(pos)
-    positions = np.array(positions, dtype=float)
-
-    C_dist = np.zeros((N, N), dtype=float)
-    L = float(args.length_scale)
-
-    for i in range(N):
-        for j in range(N):
-            if i == j:
-                continue
-            d = abs(positions[i] - positions[j])  # aa distance
-            # Simple exponential kernel: closer sites → stronger coupling
-            C_dist[i, j] = np.exp(-d / L)
-
-    # ------------------------------------------------------------------
-    # Save everything
-    # ------------------------------------------------------------------
-    pd.DataFrame(C_ptm, index=site_list, columns=site_list).to_csv(
-        args.out_global, sep="\t"
+    print("[*] Inserting intra-protein pairs into DB ...")
+    cur_intra.executemany(
+        """
+        INSERT INTO intra_pairs (protein, residue1, score1, residue2, score2)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        [(p, res1, r1, res2, r2) for (p, res1, r1, _, res2, r2) in W],
     )
-    pd.DataFrame(C_dist, index=site_list, columns=site_list).to_csv(
-        args.out_local, sep="\t"
-    )
-    pd.DataFrame({"site": site_list, "position": positions}).to_csv(
-        args.list_out, sep="\t", index=False
-    )
+    conn_intra.commit()
+    conn_intra.close()
+    print(f"[*] Saved intra-protein pairs to {args.out_intra}")
 
-    print(f"[*] Saved PTM-based C_global to {args.out_global}")
-    print(f"[*] Saved distance-based C_local to {args.out_local}")
-    print(f"[*] Saved site list to {args.list_out}")
+    # ------------------------------------------------------------------
+    # Write inter-protein pairs DB
+    # ------------------------------------------------------------------
+    print(f"[*] Initialising inter DB: {args.out_inter}")
+    conn_inter = init_inter_db(args.out_inter)
+    cur_inter = conn_inter.cursor()
+
+    print("[*] Inserting inter-protein pairs into DB ...")
+    cur_inter.executemany(
+        """
+        INSERT INTO inter_pairs
+            (protein1, residue1, score1, protein2, residue2, score2)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        B,
+    )
+    conn_inter.commit()
+    conn_inter.close()
+    print(f"[*] Saved inter-protein pairs to {args.out_inter}")
+
+    print("[*] Done.")
 
 
 if __name__ == "__main__":

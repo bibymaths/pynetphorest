@@ -1,23 +1,38 @@
-# Include license and readme
+# Core metadata
 include LICENSE
 include README.md
+include CITATION.cff
 
-# Include database and JSON atlas
-recursive-include src/pynetphorest *.db
-recursive-include src/pynetphorest *.json
-
-# Include legacy C/NN/PSSM code
-recursive-include src/pynetphorest/legacy *.c
-recursive-include src/pynetphorest/legacy *.h
-recursive-include src/pynetphorest/legacy *.txt
-
-# Include model thresholds and analysis scripts
+# Python source
 recursive-include src/pynetphorest *.py
 
-# Optional: include Snakemake + config defaults
+# Legacy C/NN/PSSM reference code
+recursive-include src/pynetphorest/legacy *.c *.h *.txt
+
+# Required model files
+recursive-include src/pynetphorest/models netphorest.db netphorest.json
+
+# Optional: small workflow/config files
 include Snakefile
 include config.yaml
 
-# Optional: include data if you want default test files
-# (If you *don’t* want to package data, remove this)
-recursive-include data *.fasta *.fas *.gz *.txt
+# ---- Exclusions to keep sdist/wheel lean ----
+
+# Do NOT ship raw data or FASTAs
+prune data
+prune fastas
+
+# Do NOT ship archives
+global-exclude *.gz
+global-exclude *.xz
+
+# Do NOT ship VCS metadata
+global-exclude .git/
+global-exclude .gitmodules
+global-exclude .gitignore
+
+# Do NOT ship caches / bytecode / egg-info
+global-exclude __pycache__/
+global-exclude *.pyc
+global-exclude *.pyo
+prune src/pynetphorest.egg-info

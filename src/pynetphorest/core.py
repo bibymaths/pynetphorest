@@ -57,6 +57,7 @@ License
 from typing import List, Iterable, Tuple, Iterator, Optional
 import json, sys, sqlite3, math
 from pathlib import Path
+from importlib.resources import files
 
 # Constants
 NA = 21
@@ -433,6 +434,28 @@ def fasta_iter(lines: Iterable[str]) -> Iterator[Tuple[str, str]]:
     if name is not None:
         yield name, "".join(seq_chunks)
 
+def get_default_atlas_path() -> Path:
+    """
+    Return the path to the bundled NetPhorest atlas inside the package.
+
+    Preference order:
+    - netphorest.db
+    - netphorest.json
+    """
+    try:
+        base = files("pynetphorest")
+        base_path = Path(base)
+    except Exception:
+        # Fallback for editable installs / local runs
+        base_path = Path(__file__).resolve().parent
+
+    for fname in ("netphorest.db", "netphorest.json"):
+        cand = base_path /  'models' / fname
+        if cand.exists():
+            return cand
+
+    # Last resort – will still error in load_atlas if missing
+    return base_path / 'models' / "netphorest.db"
 
 def load_atlas(path):
     """
@@ -444,9 +467,13 @@ def load_atlas(path):
     Returns:
         list: List of kinase model dictionaries.
     """
-    p = Path(path)
+    if path is None:
+        p = get_default_atlas_path()
+    else:
+        p = Path(path)
+
     if not p.exists():
-        print(f"Error: Atlas file '{path}' not found.")
+        print(f"Error: Atlas file '{p}' not found.")
         sys.exit(1)
 
     # Case 1: Load from SQLite Database

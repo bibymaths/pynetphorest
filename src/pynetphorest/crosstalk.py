@@ -74,7 +74,7 @@ from . import core
 WINDOW_SIZE = 9
 NEGATIVE_RATIO = 3
 BASE_DIR = pathlib.Path(__file__).resolve().parent
-DEFAULT_ATLAS_PATH = BASE_DIR / "netphorest.db"
+DEFAULT_ATLAS_PATH = core.get_default_atlas_path()
 
 
 def load_sequences(fasta_path):

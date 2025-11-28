@@ -107,13 +107,10 @@ def main():
         "--atlas",
         type=pathlib.Path,
         metavar="ATLAS",
-        default=pathlib.Path("netphorest.db"),
+        default=None,
         help=(
-            "Path to NetPhorest atlas containing kinase models.\n"
-            "Supported formats (auto-detected by extension):\n"
-            "- .db / .sqlite : SQLite atlas (recommended for speed)\n"
-            "- .json         : JSON atlas\n"
-            "Default: netphorest.db"
+            "Path to NetPhorest atlas (.db/.sqlite/.json).\n"
+            "If omitted, uses the atlas bundled with the package."
         )
     )
 
@@ -133,9 +130,14 @@ def main():
             parser.error(f"FASTA file not found: {args.fasta}")
         fasta_handle = open(args.fasta, "r")
 
-    # ATLAS must exist
-    if not args.atlas.exists():
-        parser.error(f"Atlas file not found: {args.atlas}")
+    # Resolve atlas path (use package-bundled atlas if not provided)
+    if args.atlas is None:
+        atlas_path = core.get_default_atlas_path()
+    else:
+        atlas_path = args.atlas
+
+    if not atlas_path.exists():
+        parser.error(f"Atlas file not found: {atlas_path}")
 
     # Load Models
     models = core.load_atlas(args.atlas)

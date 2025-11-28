@@ -60,8 +60,12 @@ def netphorest(
             ..., help="Input FASTA file (or '-' for stdin)."),
         out: str = typer.Option(None,
                                 "--out", help="Output TSV path. Default: stdout."),
-        atlas: str = typer.Option("netphorest.db",
-                                  "--atlas", help="Atlas .db/.sqlite or .json."),
+        atlas: str | None = typer.Option(
+            None,
+            "--atlas",
+            help="Optional atlas path (.db/.sqlite/.json). "
+                 "If omitted, use the atlas bundled with the package.",
+        ),
         causal: bool = typer.Option(False, "--causal",
                                     help="Enable Writer->Reader causal linking (Kinase recruits Binder).")):
     """
@@ -149,7 +153,7 @@ def crosstalk_train(
     else:
         atlas_path = atlas
 
-    crosstalk.train_model(fasta, within, between, atlas, model_out)
+    crosstalk.train_model(fasta, within, between, atlas_path, model_out)
 
 
 @crosstalk_app.command("predict")
@@ -200,7 +204,7 @@ def crosstalk_predict(
     else:
         atlas_path = atlas
 
-    crosstalk.predict(fasta, atlas, model, out, threshold)
+    crosstalk.predict(fasta, atlas_path, model, out, threshold)
 
 
 @crosstalk_app.command("eval")

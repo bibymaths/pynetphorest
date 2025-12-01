@@ -46,30 +46,43 @@ License
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-
+# Load configuration
 configfile: "config.yaml"
 
+# Imports
 import os
 
-RESULTS = config.get("results_dir","results")
-APP = config.get("pynetphorest_bin","pynetphorest")
+# -------------------------
+# Config & global settings
+# -------------------------
+
+RESULTS = config.get("results_dir", "results")
+APP = config.get("pynetphorest_bin", "pynetphorest")
 
 FASTA = config["fasta"]
-ATLAS = config.get("atlas","netphorest.db")
+ATLAS = config.get("atlas", "netphorest.db")
 
 # NetPhorest options
-NET_BASE = config.get("netphorest_out_basename","netphorest")
-NET_CAUSAL = config.get("netphorest_causal",False)
+NET_BASE = config.get("netphorest_out_basename", "netphorest")
+NET_CAUSAL = config.get("netphorest_causal", False)
+NET_MIN_POST = config.get("netphorest_min_posterior", 0.0)
+NET_SIG_CLAMP = config.get("netphorest_sigmoid_clamp", 50.0)
 
 # Crosstalk options
-PTM_WITHIN = config.get("ptm_within",None)
-PTM_BETWEEN = config.get("ptm_between",None)
-CROSSTALK_MODEL_NAME = config.get("crosstalk_model_name","crosstalk_model.pkl")
-CROSSTALK_PRED_NAME = config.get("crosstalk_predictions_name","crosstalk_predictions.tsv")
-CROSSTALK_THRESH = config.get("crosstalk_threshold",0.30)
-CROSSTALK_EVAL_DIR = config.get("crosstalk_eval_dir","eval")
+PTM_WITHIN = config.get("ptm_within", None)
+PTM_BETWEEN = config.get("ptm_between", None)
+CROSSTALK_MODEL_NAME = config.get("crosstalk_model_name", "crosstalk_model.pkl")
+CROSSTALK_PRED_NAME = config.get("crosstalk_predictions_name", "crosstalk_predictions.tsv")
+CROSSTALK_THRESH = config.get("crosstalk_threshold", 0.30)
+CROSSTALK_EVAL_DIR = config.get("crosstalk_eval_dir", "eval")
+
+# New knobs hooked into crosstalk.py constants
+CROSSTALK_WINDOW_SIZE = config.get("crosstalk_window_size", 9)
+CROSSTALK_NEG_RATIO = config.get("crosstalk_negative_ratio", 3)
+CROSSTALK_JOBS = config.get("crosstalk_jobs", -1)
+
 stem = os.path.splitext(CROSSTALK_MODEL_NAME)[0]
-mode = config.get("mode","crosstalk")
+mode = config.get("mode", "crosstalk")
 
 # -------------------------
 # Targets per mode
@@ -85,10 +98,10 @@ if mode in ("netphorest", "both"):
 
 crosstalk_targets = []
 if mode in ("crosstalk", "both"):
-    # final crosstalk prediction + evaluation summary TSV
+    # final crosstalk prediction + evaluation summary TSVs
     crosstalk_targets.extend([
         f"{RESULTS}/{CROSSTALK_PRED_NAME}",
-        f"{RESULTS}/{CROSSTALK_EVAL_DIR}/{os.path.splitext(CROSSTALK_MODEL_NAME)[0]}.subgroups.tsv",
+        f"{RESULTS}/{CROSSTALK_EVAL_DIR}/{stem}.subgroups.tsv",
         f"{RESULTS}/{CROSSTALK_EVAL_DIR}/{stem}.thresholds.global.tsv",
         f"{RESULTS}/{CROSSTALK_EVAL_DIR}/{stem}.thresholds.residues.tsv",
     ])
@@ -106,27 +119,11 @@ rule netphorest_classic:
         fasta=FASTA,
         atlas=ATLAS
     output:
-        tsv=f"{RESULTS}/netphorest_classic.tsv"
+        tsv=f"{RESULTS}/{NET_BASE}_classic.tsv"
     params:
-        out_name=lambda w, input, output: os.path.basename(output.tsv)
-    shell:
-        r"""
-        set -euo pipefail
-        mkdir -p {RESULTS}
-        cd {RESULTS}
-        {APP} netphorest fasta ../{input.fasta} \
-            --atlas ../{input.atlas} \
-            --out {params.out_name}
-        """
-
-rule netphorest_causal:
-    input:
-        fasta=FASTA,
-        atlas=ATLAS
-    output:
-        tsv=f"{RESULTS}/netphorest_causal.tsv"
-    params:
-        out_name=lambda w, input, output: os.path.basename(output.tsv)
+        out_name=lambda w, input, output: os.path.basename(output.tsv),
+        min_post=NET_MIN_POST,
+        sig_clamp=NET_SIG_CLAMP
     shell:
         r"""
         set -euo pipefail
@@ -135,7 +132,31 @@ rule netphorest_causal:
         {APP} netphorest fasta ../{input.fasta} \
             --atlas ../{input.atlas} \
             --out {params.out_name} \
-            --causal
+            --min-posterior {params.min_post} \
+            --sigmoid-clamp {params.sig_clamp}
+        """
+
+rule netphorest_causal:
+    input:
+        fasta=FASTA,
+        atlas=ATLAS
+    output:
+        tsv=f"{RESULTS}/{NET_BASE}_causal.tsv"
+    params:
+        out_name=lambda w, input, output: os.path.basename(output.tsv),
+        min_post=NET_MIN_POST,
+        sig_clamp=NET_SIG_CLAMP
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {RESULTS}
+        cd {RESULTS}
+        {APP} netphorest fasta ../{input.fasta} \
+            --atlas ../{input.atlas} \
+            --out {params.out_name} \
+            --causal \
+            --min-posterior {params.min_post} \
+            --sigmoid-clamp {params.sig_clamp}
         """
 
 # -------------------------
@@ -163,7 +184,9 @@ rule crosstalk_train:
         eval_npz=f"{RESULTS}/eval_data.npz",
         meta=f"{RESULTS}/edge_metadata.json"
     params:
-        model_name=lambda wildcards, input, output: os.path.basename(output.model)
+        model_name=lambda wildcards, input, output: os.path.basename(output.model),
+        window_size=CROSSTALK_WINDOW_SIZE,
+        neg_ratio=CROSSTALK_NEG_RATIO
     shell:
         r"""
         set -euo pipefail
@@ -174,7 +197,9 @@ rule crosstalk_train:
             ../{input.within} \
             ../{input.between} \
             --atlas ../{input.atlas} \
-            --out {params.model_name}
+            --out {params.model_name} \
+            --window-size {params.window_size} \
+            --neg-ratio {params.neg_ratio}
         """
 
 rule crosstalk_predict:
@@ -190,7 +215,9 @@ rule crosstalk_predict:
         preds=f"{RESULTS}/{CROSSTALK_PRED_NAME}"
     params:
         model_name=lambda wildcards, input, output: os.path.basename(input.model),
-        pred_name=lambda wildcards, input, output: os.path.basename(output.preds)
+        pred_name=lambda wildcards, input, output: os.path.basename(output.preds),
+        thresh=CROSSTALK_THRESH,
+        jobs=CROSSTALK_JOBS
     shell:
         r"""
         set -euo pipefail
@@ -201,7 +228,8 @@ rule crosstalk_predict:
             --model {params.model_name} \
             --atlas ../{input.atlas} \
             --out {params.pred_name} \
-            --thresh {CROSSTALK_THRESH}
+            --thresh {params.thresh} \
+            --jobs {params.jobs}
         """
 
 rule crosstalk_eval:
@@ -209,7 +237,8 @@ rule crosstalk_eval:
     Evaluate the trained crosstalk model.
 
     Calls:
-      app crosstalk eval --model ... --eval-npz ... --dataset-npz ... --metadata ... --predictions-tsv ... --outdir ...
+      {APP} crosstalk eval --model ... --eval-npz ... --dataset-npz ...
+                           --metadata ... --predictions-tsv ... --outdir ...
     and we track the subgroup metrics TSV in results/<CROSSTALK_EVAL_DIR>/.
     """
     input:
@@ -219,7 +248,7 @@ rule crosstalk_eval:
         meta=f"{RESULTS}/edge_metadata.json",
         preds=f"{RESULTS}/{CROSSTALK_PRED_NAME}"
     output:
-        subgroups=f"{RESULTS}/{CROSSTALK_EVAL_DIR}/{os.path.splitext(CROSSTALK_MODEL_NAME)[0]}.subgroups.tsv"
+        subgroups=f"{RESULTS}/{CROSSTALK_EVAL_DIR}/{stem}.subgroups.tsv"
     params:
         model_name=lambda wildcards, input, output: os.path.basename(input.model),
         eval_name=lambda wildcards, input, output: os.path.basename(input.eval_npz),
@@ -257,18 +286,18 @@ rule model_sweep_thresh:
     input:
         model=f"{RESULTS}/{CROSSTALK_MODEL_NAME}",
         eval_npz=f"{RESULTS}/eval_data.npz",
-        full_npz=f"{RESULTS}/full_dataset.npz",
+        dataset=f"{RESULTS}/full_dataset.npz",
         meta=f"{RESULTS}/edge_metadata.json"
     output:
-        global_tsv=f"{RESULTS}/{CROSSTALK_EVAL_DIR}/{os.path.splitext(CROSSTALK_MODEL_NAME)[0]}.thresholds.global.tsv",
-        residues_tsv=f"{RESULTS}/{CROSSTALK_EVAL_DIR}/{os.path.splitext(CROSSTALK_MODEL_NAME)[0]}.thresholds.residues.tsv"
+        global_metrics=f"{RESULTS}/{CROSSTALK_EVAL_DIR}/{stem}.thresholds.global.tsv",
+        residue_metrics=f"{RESULTS}/{CROSSTALK_EVAL_DIR}/{stem}.thresholds.residues.tsv"
     params:
-        model_name=lambda w, input, output: os.path.basename(input.model),
-        eval_name=lambda w, input, output: os.path.basename(input.eval_npz),
-        full_name=lambda w, input, output: os.path.basename(input.full_npz),
-        meta_name=lambda w, input, output: os.path.basename(input.meta),
-        global_name=lambda w, input, output: os.path.basename(output.global_tsv),
-        residues_name=lambda w, input, output: os.path.basename(output.residues_tsv)
+        model_name=lambda wildcards, input, output: os.path.basename(input.model),
+        eval_name=lambda wildcards, input, output: os.path.basename(input.eval_npz),
+        full_name=lambda wildcards, input, output: os.path.basename(input.dataset),
+        meta_name=lambda wildcards, input, output: os.path.basename(input.meta),
+        global_name=lambda wildcards, input, output: os.path.basename(output.global_metrics),
+        residues_name=lambda wildcards, input, output: os.path.basename(output.residue_metrics)
     shell:
         r"""
         set -euo pipefail

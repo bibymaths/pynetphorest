@@ -1,4 +1,4 @@
-# pynetphorest
+# pynetphorest 
 
 <p align="center">
   <img src="images/pynetphorest_schematic.svg" width="700">
@@ -10,8 +10,8 @@
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-[![Snakemake](https://img.shields.io/badge/workflow-Snakemake-1f77b4.svg)](https://snakemake.github.io)
- 
+[![Snakemake](https://img.shields.io/badge/workflow-Snakemake-1f77b4.svg)](https://snakemake.github.io) 
+
 --- 
 
 ### **Understanding the biological problem**

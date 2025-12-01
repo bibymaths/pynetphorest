@@ -76,6 +76,9 @@ READER_DOMAINS = {
     'SH2', 'PTB', 'C2', 'WW', '14-3-3', 'FHA', 'BRCT',
     'Polo-box', 'WD40', 'Broman', 'Chromodomain'
 }
+# Numerical stability clamp for sigmoid argument term
+# Absolute value; if None, clamping is disabled.
+SIGMOID_CLAMP: float | None = 50.0
 # Precomputed Sigmoid Lookup Table for fast approximation
 SIGMOID_DATA: List[float] = [
     0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000,
@@ -636,11 +639,13 @@ def get_model_posterior(seq_upper, i, model):
     sig = model["sigmoid"]
     term = sig["slope"] * (sig["inflection"] - log_score)
 
-    # Clamp for numerical stability
-    if term > 50.0:
-        term = 50.0
-    elif term < -50.0:
-        term = -50.0
+    # Clamp for numerical stability (configurable)
+    if SIGMOID_CLAMP is not None:
+        max_term = float(SIGMOID_CLAMP)
+        if term > max_term:
+            term = max_term
+        elif term < -max_term:
+            term = -max_term
 
     posterior = sig["min"] + (sig["max"] - sig["min"]) / (1.0 + math.exp(term))
     return posterior

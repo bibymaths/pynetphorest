@@ -120,7 +120,33 @@ def main():
         help="Enable Writer->Reader causal linking (Kinase recruits Binder)."
     )
 
+    parser.add_argument(
+        "--sigmoid-clamp",
+        type=float,
+        default=50.0,
+        metavar="VAL",
+        help=(
+            "Absolute cap on the sigmoid argument term for numerical stability "
+            "(default: 50.0). Set to 0 to disable clamping; larger values reduce "
+            "saturation, smaller values force stronger saturation."
+        ),
+    )
+
+    parser.add_argument(
+        "--min-posterior",
+        type=float,
+        default=0.0,
+        metavar="P",
+        help="Minimum posterior probability to report a site (default: 0.0).",
+    )
+
     args = parser.parse_args()
+
+    # Configure sigmoid clamp in core
+    if args.sigmoid_clamp <= 0.0:
+        core.SIGMOID_CLAMP = None
+    else:
+        core.SIGMOID_CLAMP = args.sigmoid_clamp
 
     # FASTA input: allow stdin via "-"
     if str(args.fasta) == "-":
@@ -228,22 +254,29 @@ def main():
 
                 sig = model["sigmoid"]
                 term = sig["slope"] * (sig["inflection"] - log_score)
-                if term > 50.0:
-                    term = 50.0
-                elif term < -50.0:
-                    term = -50.0
+
+                # Use configurable clamp from core
+                if core.SIGMOID_CLAMP is not None:
+                    max_term = float(core.SIGMOID_CLAMP)
+                    if term > max_term:
+                        term = max_term
+                    elif term < -max_term:
+                        term = -max_term
 
                 posterior = sig["min"] + (sig["max"] - sig["min"]) / (1.0 + math.exp(term))
 
-                if posterior > 0.0:
-                    visual = core.get_display_window(seq_upper, i)
-                    meta = model["meta"]
-                    line = (
-                        f"{name}\t{i + 1}\t{res}\t{visual}\t"
-                        f"{meta['method']}\t{meta['tree']}\t{meta['classifier']}\t"
-                        f"{meta['kinase']}\t{posterior:.6f}\t{meta['prior']:.6f}"
-                    )
-                    out_lines.append(line)
+                # Apply user-defined posterior cutoff
+                if posterior < args.min_posterior:
+                    continue
+
+                visual = core.get_display_window(seq_upper, i)
+                meta = model["meta"]
+                line = (
+                    f"{name}\t{i + 1}\t{res}\t{visual}\t"
+                    f"{meta['method']}\t{meta['tree']}\t{meta['classifier']}\t"
+                    f"{meta['kinase']}\t{posterior:.6f}\t{meta['prior']:.6f}"
+                )
+                out_lines.append(line)
 
             return out_lines
 

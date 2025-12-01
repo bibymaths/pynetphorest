@@ -4,7 +4,7 @@ message: >
   alongside the foundational NetPhorest / KinomeXplorer, PTMcode v2,
   and NetworKIN phosphorylation network discovery papers.
 title: "pynetphorest: modern NetPhorest-style scoring and phosphorylation crosstalk modeling in Python"
-version: "0.1.0"
+version: "0.1.2"
 type: software
 
 authors:

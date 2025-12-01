@@ -75,6 +75,21 @@ def netphorest(
             "(kinase recruits a binding-domain 'reader')."
         ),
     ),
+    min_posterior: float = typer.Option(
+        0.0,
+        "--min-posterior",
+        metavar="P",
+        help="Minimum posterior probability to report a site (default: 0.0).",
+    ),
+    sigmoid_clamp: float = typer.Option(
+        50.0,
+        "--sigmoid-clamp",
+        metavar="VAL",
+        help=(
+            "Absolute cap on sigmoid argument term (default: 50.0). "
+            "Set to 0 to disable clamping."
+        ),
+    ),
 ):
     """
     Run NetPhorest prediction on protein sequences.
@@ -101,6 +116,9 @@ def netphorest(
         sys.argv += ["--atlas", atlas]
     if causal:
         sys.argv.append("--causal")
+    # new knobs:
+    sys.argv += ["--min-posterior", str(min_posterior)]
+    sys.argv += ["--sigmoid-clamp", str(sigmoid_clamp)]
 
     main()
 
@@ -144,6 +162,19 @@ def crosstalk_train(
         metavar="PKL",
         help="Output filename for the trained model (default: crosstalk_model.pkl).",
     ),
+    window_size: int = typer.Option(
+        9,
+        "--window-size",
+        metavar="N",
+        help="Peptide window size around each STY site (odd number, default: 9).",
+    ),
+    negative_ratio: int = typer.Option(
+        3,
+        "--neg-ratio",
+        "--negative-ratio",
+        metavar="K",
+        help="Number of negative edges per positive (default: 3).",
+    ),
 ):
     """
     Train a pairwise crosstalk model using PTMcode2 + NetPhorest features.
@@ -168,8 +199,15 @@ def crosstalk_train(
             raise typer.Exit(code=1)
 
     atlas_path = atlas if atlas is not None else None
-    crosstalk.train_model(fasta, within, between, atlas_path, model_out)
-
+    crosstalk.train_model(
+        fasta=fasta,
+        within_file=within,
+        between_file=between,
+        atlas_path=atlas_path,
+        output_model=model_out,
+        window_size=window_size,
+        negative_ratio=negative_ratio,
+    )
 
 @crosstalk_app.command("predict")
 def crosstalk_predict(

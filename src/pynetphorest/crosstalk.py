@@ -191,8 +191,15 @@ def parse_ptmcode_line(line, structure="within"):
     except (ValueError, IndexError):
         return None
 
-
-def train_model(fasta, within_file, between_file, atlas_path=pathlib.Path | None, output_model="crosstalk_model.pkl"):
+def train_model(
+    fasta,
+    within_file,
+    between_file,
+    atlas_path: pathlib.Path | None = None,
+    output_model: str = "crosstalk_model.pkl",
+    window_size: int = WINDOW_SIZE,
+    negative_ratio: int = NEGATIVE_RATIO,
+):
     """
     Train a crosstalk prediction model using PTMcode data.
 
@@ -205,6 +212,10 @@ def train_model(fasta, within_file, between_file, atlas_path=pathlib.Path | None
     Returns:
         None
     """
+    global WINDOW_SIZE, NEGATIVE_RATIO
+    WINDOW_SIZE = int(window_size)
+    NEGATIVE_RATIO = int(negative_ratio)
+
     if atlas_path is None:
         atlas_path = DEFAULT_ATLAS_PATH
     print(f"Loading Atlas from {atlas_path}...")

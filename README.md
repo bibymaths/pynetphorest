@@ -5,7 +5,8 @@
 [![pip install](https://img.shields.io/badge/pip%20install-pynetphorest-brightgreen)](https://pypi.org/project/pynetphorest/)
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue) 
+[![DOI](https://zenodo.org/badge/1093852039.svg)](https://zenodo.org/badge/latestdoi/1093852039)
 ---  
 
 <p align="center">

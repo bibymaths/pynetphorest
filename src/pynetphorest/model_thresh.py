@@ -68,9 +68,9 @@ def load_model(path: str):
     Load a trained model from a pickle file.
     Returns the model object.
 
-    Args :
-        path (str) : Path to the pickle file containing the trained model.
-    Returns :
+    Args:
+        path (str): Path to the pickle file containing the trained model.
+    Returns:
         The loaded model object.
     """
     with open(path, "rb") as f:
@@ -83,11 +83,11 @@ def load_eval_data(path: str) -> Tuple[np.ndarray, np.ndarray]:
     Load evaluation data from a .npz file.
     Returns X_test, y_test arrays.
 
-    Args :
-        path (str) : Path to the .npz file containing evaluation data.
-    Returns :
-        X_test (np.ndarray) : Feature matrix for test data.
-        y_test (np.ndarray) : Labels for test data.
+    Args:
+        path (str): Path to the .npz file containing evaluation data.
+    Returns:
+        X_test (np.ndarray): Feature matrix for test data.
+        y_test (np.ndarray): Labels for test data.
     """
     data = np.load(path, allow_pickle=True)
     X_test = data["X_test"]
@@ -100,10 +100,10 @@ def load_full_dataset(path: str) -> np.ndarray:
     Load the full dataset labels from a .npz file.
     Returns y_all array.
 
-    Args :
-        path (str) : Path to the .npz file containing the full dataset.
-    Returns :
-        y_all (np.ndarray) : Labels for the full dataset.
+    Args:
+        path (str): Path to the .npz file containing the full dataset.
+    Returns:
+        y_all (np.ndarray): Labels for the full dataset.
     """
     data = np.load(path, allow_pickle=True)
     y_all = data["y"]
@@ -135,12 +135,12 @@ def compute_test_indices(y_all: np.ndarray, test_size: float = 0.2, seed: int = 
     Reproduce the same train/test split used during training.
     We stratify by y and use the same random_state.
 
-    Args :
-        y_all (np.ndarray) : Labels for the full dataset.
-        test_size (float) : Proportion of the dataset to include in the test split.
-        seed (int) : Random seed for reproducibility.
-    Returns :
-        idx_test (np.ndarray) : Indices of test samples in the full dataset.
+    Args:
+        y_all (np.ndarray): Labels for the full dataset.
+        test_size (float): Proportion of the dataset to include in the test split.
+        seed (int): Random seed for reproducibility.
+    Returns:
+        idx_test (np.ndarray): Indices of test samples in the full dataset.
     """
     indices = np.arange(len(y_all))
     _, idx_test = train_test_split(
@@ -160,10 +160,10 @@ def residue_group_from_meta(m: Dict) -> str:
     - S, T, Y if both sites share that residue
     - mixed otherwise
 
-    Args :
-        m (Dict) : Metadata dictionary for a sample.
-    Returns :
-        group (str) : Residue group label.
+    Args:
+        m (Dict): Metadata dictionary for a sample.
+    Returns:
+        group (str): Residue group label.
     """
     aa1 = m.get("aa1", "")
     aa2 = m.get("aa2", "")
@@ -176,11 +176,11 @@ def build_residue_groups_for_test(meta_all: List[Dict], idx_test: np.ndarray) ->
     """
     Build a residue-group label for each test sample, in test set order.
 
-    Args :
-        meta_all (List[Dict]) : List of metadata dictionaries for all samples.
-        idx_test (np.ndarray) : Indices of test samples in the full dataset.
-    Returns :
-        groups (List[str]) : List of residue group labels for test samples.
+    Args:
+        meta_all (List[Dict]): List of metadata dictionaries for all samples.
+        idx_test (np.ndarray): Indices of test samples in the full dataset.
+    Returns:
+        groups (List[str]): List of residue group labels for test samples.
     """
     groups = []
     for idx in idx_test:

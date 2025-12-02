@@ -1,20 +1,20 @@
 # pynetphorest 
 
+![CLI Tool](https://img.shields.io/badge/tool-CLI-blue)
+[![PyPI version](https://img.shields.io/pypi/v/pynetphorest.svg)](https://pypi.org/project/pynetphorest/)
+[![pip install](https://img.shields.io/badge/pip%20install-pynetphorest-brightgreen)](https://pypi.org/project/pynetphorest/)
+
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+---  
+
 <p align="center">
   <img src="images/pynetphorest_schematic.svg" width="700">
 </p>
 
 `pynetphorest` is a **modern Python re-implementation and extension** of the NetPhorest scoring engine.
 
----  
-
-![CLI Tool](https://img.shields.io/badge/tool-CLI-blue)
-[![PyPI version](https://img.shields.io/pypi/v/pynetphorest.svg)](https://pypi.org/project/pynetphorest/)
-[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-[![pip install](https://img.shields.io/badge/pip%20install-pynetphorest-brightgreen)](https://pypi.org/project/pynetphorest/)
-
---- 
+---
 
 ### **Understanding the biological problem**
 

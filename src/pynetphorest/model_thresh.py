@@ -116,9 +116,9 @@ def load_edge_metadata(path: str) -> List[Dict]:
     Returns a list of metadata dictionaries.
 
     Args:
-        path (str): Path to the JSON lines file containing edge metadata.
+        path (str) : Path to the JSON lines file containing edge metadata.
     Returns:
-        meta (List[Dict]): List of metadata dictionaries for each edge.
+        meta (List[Dict]) : List of metadata dictionaries for each edge.
     """
     meta = []
     with open(path, "r") as f:

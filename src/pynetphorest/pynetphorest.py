@@ -183,7 +183,8 @@ def main():
 
     # Setup Output
     if args.out:
-        out_handle = open(args.out, 'w')
+        out_path = core.ensure_parent_dir(args.out)
+        out_handle = out_path.open("w")
     else:
         out_handle = sys.stdout
 

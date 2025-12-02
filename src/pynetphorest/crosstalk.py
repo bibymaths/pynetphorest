@@ -563,7 +563,7 @@ def predict(
     fasta: str,
     atlas_path: pathlib.Path | None = None,
     model_path: pathlib.Path | None = None,
-    out: pathlib.Path | None = None,
+    out: pathlib.Path | str = "crosstalk_predictions.tsv",
     threshold: float | None = None,
     n_jobs: int = -1,
 ):
@@ -575,7 +575,7 @@ def predict(
         fasta (str): Path to the FASTA file with protein sequences.
         atlas_path (str or None): Path to the NetPhorest atlas file.
         model_path (str or None): Path to the trained model file.
-        out (str or None): Path to the output TSV file.
+        out (str): Path to the output TSV file. Defaults to "crosstalk_predictions.tsv".
         threshold (float): Probability threshold for reporting crosstalk.
         n_jobs (int): Number of parallel jobs (-1 for all cores).
     Returns:
@@ -583,9 +583,6 @@ def predict(
     """
     if atlas_path is None:
         atlas_path = DEFAULT_ATLAS_PATH
-
-    if out is None:
-        raise ValueError("out parameter is required and cannot be None")
 
     out_path = core.ensure_parent_dir(out)
 

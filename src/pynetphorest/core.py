@@ -649,3 +649,12 @@ def get_model_posterior(seq_upper, i, model):
 
     posterior = sig["min"] + (sig["max"] - sig["min"]) / (1.0 + math.exp(term))
     return posterior
+
+def ensure_parent_dir(path: str | Path) -> Path:
+    """
+    Ensure the parent directory for `path` exists, return Path object.
+    Safe for bare filenames (parent == '.').
+    """
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p

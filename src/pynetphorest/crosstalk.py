@@ -541,14 +541,17 @@ def _predict_for_protein(name, seq, models_by_res, models, clf, threshold):
         aa1 = seq[s1]
         aa2 = seq[s2]
 
+        # per-residue internal minimums
         if aa1 == aa2 == "S":
-            th = 0.25
+            base_th = 0.25
         elif aa1 == aa2 == "Y":
-            th = 0.35
+            base_th = 0.35
         else:
-            th = 0.30
-        # if prob >= threshold:
-        if prob >= th:
+            base_th = 0.30
+
+        eff_th = max(base_th, threshold)
+
+        if prob >= eff_th:
             res1 = f"{seq[s1]}{s1 + 1}"
             res2 = f"{seq[s2]}{s2 + 1}"
             lines.append(f"{name}\t{res1}\t{res2}\t{prob:.4f}\n")
@@ -557,13 +560,14 @@ def _predict_for_protein(name, seq, models_by_res, models, clf, threshold):
 
 
 def predict(
-        fasta,
-        atlas_path=pathlib.Path | None,
-        model_path=pathlib.Path | None,
-        out=pathlib.Path | None,
-        threshold=0.8,
-        n_jobs=-1,
+    fasta: str,
+    atlas_path: pathlib.Path | None = None,
+    model_path: pathlib.Path | None = None,
+    out: pathlib.Path | None = None,
+    threshold: float | None = None,
+    n_jobs: int = -1,
 ):
+
     """
     Predict crosstalk for all proteins in a FASTA file.
 
@@ -579,6 +583,8 @@ def predict(
     """
     if atlas_path is None:
         atlas_path = DEFAULT_ATLAS_PATH
+
+    out_path = core.ensure_parent_dir(out)
 
     print("Loading Atlas and Model...")
     atlas = core.load_atlas(atlas_path)
@@ -608,7 +614,7 @@ def predict(
     )
 
     # Write output once
-    with open(out, "w") as f_out:
+    with out_path.open("w") as f_out:
         f_out.write("Protein\tSite1\tSite2\tCrosstalk_Prob\n")
         for lines in results:
             for line in lines:

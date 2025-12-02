@@ -243,7 +243,7 @@ def eval_thresholds(
         thresholds (np.ndarray) : Array of thresholds to evaluate.
     Returns:
         global_rows (List[Dict]) : List of dictionaries with global metrics per threshold.
-        residue_rows (List[Dict]) : List of dictionaries with per-residue metrics per threshold
+        residue_rows (List[Dict]) : List of dictionaries with per-residue metrics per threshold.
     """
     global_rows: List[Dict] = []
     residue_rows: List[Dict] = []

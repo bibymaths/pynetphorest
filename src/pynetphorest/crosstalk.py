@@ -584,6 +584,9 @@ def predict(
     if atlas_path is None:
         atlas_path = DEFAULT_ATLAS_PATH
 
+    if out is None:
+        raise ValueError("out parameter is required and cannot be None")
+
     out_path = core.ensure_parent_dir(out)
 
     print("Loading Atlas and Model...")

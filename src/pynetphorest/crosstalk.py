@@ -564,7 +564,7 @@ def predict(
     atlas_path: pathlib.Path | None = None,
     model_path: pathlib.Path | None = None,
     out: pathlib.Path | None = None,
-    threshold: float | None = None,
+    threshold: float = 0.8,
     n_jobs: int = -1,
 ):
 

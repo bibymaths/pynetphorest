@@ -575,7 +575,7 @@ def predict(
         fasta (str): Path to the FASTA file with protein sequences.
         atlas_path (str or None): Path to the NetPhorest atlas file.
         model_path (str or None): Path to the trained model file.
-        out (str): Path to the output TSV file. Defaults to "crosstalk_predictions.tsv".
+        out (str or pathlib.Path): Path to the output TSV file. Defaults to "crosstalk_predictions.tsv".
         threshold (float): Probability threshold for reporting crosstalk.
         n_jobs (int): Number of parallel jobs (-1 for all cores).
     Returns:
